@@ -1,0 +1,13 @@
+[package]
+name = "swap"
+version = "0.0.0"
+
+[addresses]
+aptos_framework = "0x1"
+deployer = "6b5dd370b613d3aa9761aefd65d590136d87cc3d0369b0f14f9cabc83d5b9fb1"
+swap = "0x83c7f3f042be1471c2d5a2341c7c64d1c870171082a4adc35c61e206fa6517e3"
+
+[dependencies.AptosFramework]
+git = "https://github.com/aptos-labs/aptos-core.git"
+rev = "mainnet"
+subdir = "aptos-move/framework/aptos-framework"

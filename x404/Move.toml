@@ -1,0 +1,18 @@
+[package]
+name = "x404"
+version = "1.0.0"
+authors = []
+upgrade_policy = "compatible"
+
+[addresses]
+bonding_curve_launchpad = "0xeeef815997142f3ef7232f2bda6be8d80c4bb1478efb013e8f0650d4de9adcba"
+deployer = "6b5dd370b613d3aa9761aefd65d590136d87cc3d0369b0f14f9cabc83d5b9fb1"
+swap = "0x83c7f3f042be1471c2d5a2341c7c64d1c870171082a4adc35c61e206fa6517e3"
+
+[dependencies.AptosFramework]
+git = "https://github.com/aptos-labs/aptos-core.git"
+rev = "mainnet"
+subdir = "aptos-move/framework/aptos-framework"
+
+[dependencies.swap]
+local = "../swap"
