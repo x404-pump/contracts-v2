@@ -6,11 +6,12 @@ module swap::test_helpers {
     use aptos_framework::primary_fungible_store;
     use std::option;
     use std::string;
+    use aptos_framework::account;
     use swap::package_manager;
     use swap::liquidity_pool;
 
-    public fun set_up(deployer: &signer) {
-        package_manager::initialize_for_test(deployer);
+    public fun set_up(_deployer: &signer) {
+        package_manager::initialize_for_test(&account::create_account_for_test(@deployer));
         liquidity_pool::initialize();
     }
 

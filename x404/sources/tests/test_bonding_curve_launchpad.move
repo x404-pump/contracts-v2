@@ -24,11 +24,11 @@ module bonding_curve_launchpad::test_bonding_curve_launchpad {
         account::create_account_for_test(@0xcafe);
         account::create_account_for_test(@bonding_curve_launchpad);
         account::create_account_for_test(@0x803);
-        coin::register<AptosCoin>(bonding_curve_creator);
 
         let (burn_cap, mint_cap) = aptos_coin::initialize_for_test(aptos_framework);
         let bcc_coins = coin::mint(1_000_000_000_000_000, &mint_cap);
         let bcc_address = signer::address_of(bonding_curve_creator);
+        coin::register<AptosCoin>(bonding_curve_creator);
         coin::deposit(bcc_address, bcc_coins);
 
         coin::destroy_burn_cap(burn_cap);

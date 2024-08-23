@@ -53,16 +53,11 @@ module swap::package_manager {
 
     #[test_only]
     public fun initialize_for_test(deployer: &signer) {
-        let deployer_addr = std::signer::address_of(deployer);
-        if (!exists<PermissionConfig>(deployer_addr)) {
-            aptos_framework::timestamp::set_time_has_started_for_testing(&account::create_signer_for_test(@0x1));
+        account::create_account_for_test(std::signer::address_of(deployer));
+        resource_account::create_resource_account(deployer, b"0", x""); // swap account
+        aptos_framework::timestamp::set_time_has_started_for_testing(&account::create_signer_for_test(@0x1));
 
-            account::create_account_for_test(deployer_addr);
-            move_to(deployer, PermissionConfig {
-                addresses: smart_table::new<String, address>(),
-                signer_cap: account::create_test_signer_cap(deployer_addr),
-            });
-        };
+        init_module(&account::create_signer_for_test(@swap));
     }
 
     #[test_only]
