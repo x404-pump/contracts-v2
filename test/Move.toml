@@ -1,0 +1,23 @@
+[package]
+name = "x404"
+version = "1.0.0"
+authors = []
+upgrade_policy = "compatible"
+
+[addresses]
+test = "c3ea343737c8c46467fc86e55b19f25adfc870128dcde1912e3f5dc92563e36d"
+
+[dependencies.AptosFramework]
+git = "https://github.com/aptos-labs/aptos-core.git"
+rev = "mainnet"
+subdir = "aptos-move/framework/aptos-framework"
+
+[dependencies.AptosTokenObjects]
+git = "https://github.com/aptos-labs/aptos-core.git"
+rev = "mainnet"
+subdir = "aptos-move/framework/aptos-token-objects"
+
+[dependencies.AptosStdlib]
+git = "https://github.com/aptos-labs/aptos-core.git"
+rev = "mainnet"
+subdir = "aptos-move/framework/aptos-stdlib"
