@@ -5,7 +5,7 @@ authors = []
 upgrade_policy = "compatible"
 
 [addresses]
-test = "c3ea343737c8c46467fc86e55b19f25adfc870128dcde1912e3f5dc92563e36d"
+test = "_"
 
 [dependencies.AptosFramework]
 git = "https://github.com/aptos-labs/aptos-core.git"

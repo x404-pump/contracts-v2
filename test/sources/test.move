@@ -6,7 +6,7 @@ module test::test {
   use aptos_std::math128::{Self};
   use aptos_framework::object::{Self, Object, TransferRef};
   use aptos_framework::primary_fungible_store::{Self};
-  use aptos_framework::fungible_asset::{Self, FungibleAsset, Metadata, TransferRef as FungibleTransferRef};
+  use aptos_framework::fungible_asset::{Self, FungibleAsset, Metadata, TransferRef as FungibleTransferRef, MintRef};
   use aptos_token_objects::collection::{Self, Collection};
   use aptos_token_objects::token::{Self};
   use aptos_token_objects::royalty::{Self, Royalty};
@@ -25,6 +25,7 @@ module test::test {
 
   struct Collection404 has key {
     collection: Object<Collection>,
+    mint_ref: MintRef,
   }
 
   struct TokenFunctionInfo has key {
@@ -90,7 +91,7 @@ module test::test {
     object::create_object_address(&creator, *string::bytes(&metadata_seed))
   }
 
-  #[lint::allow_unsafe_randomness]
+  #[lint::allow_unsafe_randomness]  
   public fun withdraw<T: key>(
     store: Object<T>,
     amount: u64,
@@ -209,6 +210,7 @@ module test::test {
     let metadata_signer = object::generate_signer(&metadata_object_constructor_ref);
     move_to(&metadata_signer, Collection404 {
       collection: object::object_from_constructor_ref<Collection>(&collection_constructor_ref),
+      mint_ref: fungible_asset::generate_mint_ref(&metadata_object_constructor_ref)
     });
     // store nft owners info
     let collection_signer = object::generate_signer(&collection_constructor_ref);
@@ -217,7 +219,8 @@ module test::test {
     });
   } 
 
-  entry public fun mint_404_in_collection(creator: &signer, collection_address: address, description: String, name: String, uri: String) {
+  entry public fun mint_404_in_collection(creator: &signer, collection_address: address, description: String, name: String, uri: String)
+  acquires Token404Info, Collection404 {
     let collection_object = object::address_to_object<Collection>(collection_address);
     let nft_constructor_ref = token::create_named_token_object(
       creator,
@@ -236,9 +239,15 @@ module test::test {
       collection: collection_object,
       transfer_ref: nft_transfer_ref,
     });
+    smart_vector::push_back(&mut borrow_global_mut<Token404Info>(collection_address).holders, OwnerInfo {
+      owner: @test,
+      token: nft_object,
+    });
+    primary_fungible_store::mint(&borrow_global<Collection404>(collection_address).mint_ref, @test, ONE_FA_VALUE);    
   }
 
-  entry public fun mint_batch_404s_in_collection(creator: &signer, collection_address: address, descriptions: vector<String>, names: vector<String>, uris: vector<String>) {
+  entry public fun mint_batch_404s_in_collection(creator: &signer, collection_address: address, descriptions: vector<String>, names: vector<String>, uris: vector<String>)
+  acquires Token404Info, Collection404 {
     assert!(vector::length<String>(&descriptions) == vector::length<String>(&names) && vector::length<String>(&names) == vector::length<String>(&uris), 101);
     let collection_object = object::address_to_object<Collection>(collection_address);
     for (i in 0..vector::length<String>(&descriptions)) {
