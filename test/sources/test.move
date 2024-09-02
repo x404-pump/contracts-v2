@@ -13,7 +13,18 @@ module test::test {
   use aptos_framework::function_info::{Self, FunctionInfo};
   use aptos_framework::dispatchable_fungible_asset::{Self};
 
+  #[test_only]
+  use aptos_framework::account;
+  #[test_only]
+  use aptos_framework::genesis::setup;
+
   use aptos_std::smart_vector::{Self, SmartVector};
+  #[test_only]
+  use aptos_framework::genesis;
+  #[test_only]
+  use aptos_framework::primary_fungible_store::{primary_store, ensure_primary_store_exists};
+  #[test_only]
+  use aptos_framework::randomness;
 
   const DECIMALs: u8 = 8;
   const ONE_FA_VALUE: u64 = 100_000_000;
@@ -28,12 +39,16 @@ module test::test {
     mint_ref: MintRef,
   }
 
+  struct Collection404TransferRef has key {
+    fa_transfer_ref: FungibleTransferRef
+  }
+
   struct TokenFunctionInfo has key {
     deposit_override: FunctionInfo,
     withdraw_override: FunctionInfo,
   }
 
-  struct OwnerInfo has key, store, copy {
+  struct OwnerInfo has key, store, copy, drop {
     owner: address, 
     token: Object<Token404>,
   }
@@ -180,7 +195,8 @@ module test::test {
   //   // get_collection_address(&signer::address_of(&signer::get()), fa_name)
   // }
 
-  entry public fun create_collection(creator: &signer, description: String, supply: u64, name: String, royalty: Option<Royalty>, uri: String, fa_symbol: String, fa_icon: String) acquires TokenFunctionInfo {
+  fun create_collection_interal(creator: &signer, description: String, supply: u64, name: String, royalty: Option<Royalty>, uri: String, fa_symbol: String, fa_icon: String): address acquires TokenFunctionInfo {
+
     assert!(supply > 0 && supply <= 1_000_000, 101);
 
     let collection_constructor_ref = collection::create_fixed_collection(
@@ -198,11 +214,13 @@ module test::test {
       fa_icon, /* icon */
       uri, /* project */
     );
+    let mint_ref = fungible_asset::generate_mint_ref(&metadata_object_constructor_ref);
+    let fa_transfer_ref = fungible_asset::generate_transfer_ref(&metadata_object_constructor_ref);
     let function_override = borrow_global<TokenFunctionInfo>(@test);
     dispatchable_fungible_asset::register_dispatch_functions(
       &metadata_object_constructor_ref,
-      option::some(function_override.deposit_override),
       option::some(function_override.withdraw_override),
+      option::some(function_override.deposit_override),
       option::none(),
     );
 
@@ -210,17 +228,25 @@ module test::test {
     let metadata_signer = object::generate_signer(&metadata_object_constructor_ref);
     move_to(&metadata_signer, Collection404 {
       collection: object::object_from_constructor_ref<Collection>(&collection_constructor_ref),
-      mint_ref: fungible_asset::generate_mint_ref(&metadata_object_constructor_ref)
+      mint_ref,
+    });
+    move_to(&metadata_signer, Collection404TransferRef {
+      fa_transfer_ref
     });
     // store nft owners info
     let collection_signer = object::generate_signer(&collection_constructor_ref);
     move_to(&collection_signer, Token404Info {
       holders: smart_vector::new<OwnerInfo>(),
     });
+    object::address_from_constructor_ref(&collection_constructor_ref)
+  }
+
+  entry public fun create_collection(creator: &signer, description: String, supply: u64, name: String, royalty: Option<Royalty>, uri: String, fa_symbol: String, fa_icon: String) acquires TokenFunctionInfo {
+    create_collection_interal(creator, description, supply, name, royalty, uri, fa_symbol, fa_icon);
   } 
 
   entry public fun mint_404_in_collection(creator: &signer, collection_address: address, description: String, name: String, uri: String)
-  acquires Token404Info, Collection404 {
+  acquires Token404Info, Collection404, Token404 {
     let collection_object = object::address_to_object<Collection>(collection_address);
     let nft_constructor_ref = token::create_named_token_object(
       creator,
@@ -232,22 +258,24 @@ module test::test {
     );
     let nft_signer = object::generate_signer(&nft_constructor_ref);
     let nft_transfer_ref = object::generate_transfer_ref(&nft_constructor_ref);
-    let nft_object = object::object_from_constructor_ref<Token404>(&nft_constructor_ref);
-    object::transfer<Token404>(creator, nft_object, @test); 
-    object::disable_ungated_transfer(&nft_transfer_ref);
     move_to(&nft_signer, Token404 {
       collection: collection_object,
       transfer_ref: nft_transfer_ref,
     });
+    let nft_transfer_ref = &borrow_global<Token404>(signer::address_of(&nft_signer)).transfer_ref;
+    let nft_object = object::object_from_constructor_ref<Token404>(&nft_constructor_ref);
+    object::transfer<Token404>(creator, nft_object, @test);
+    object::disable_ungated_transfer(nft_transfer_ref);
     smart_vector::push_back(&mut borrow_global_mut<Token404Info>(collection_address).holders, OwnerInfo {
       owner: @test,
       token: nft_object,
     });
-    primary_fungible_store::mint(&borrow_global<Collection404>(collection_address).mint_ref, @test, ONE_FA_VALUE);    
+    let metadata_address = get_fa_metadata_address(collection_address);
+    primary_fungible_store::mint(&borrow_global<Collection404>(metadata_address).mint_ref, @test, ONE_FA_VALUE);
   }
 
   entry public fun mint_batch_404s_in_collection(creator: &signer, collection_address: address, descriptions: vector<String>, names: vector<String>, uris: vector<String>)
-  acquires Token404Info, Collection404 {
+  acquires Token404Info, Collection404, Token404 {
     assert!(vector::length<String>(&descriptions) == vector::length<String>(&names) && vector::length<String>(&names) == vector::length<String>(&uris), 101);
     let collection_object = object::address_to_object<Collection>(collection_address);
     for (i in 0..vector::length<String>(&descriptions)) {
@@ -255,13 +283,87 @@ module test::test {
     };
   }
 
-  entry public fun transfer_404(from: &signer, to: address, token_address: address) acquires Token404 {
+  entry public fun transfer_404(from: &signer, to: address, token_address: address) acquires Token404, Token404Info, Collection404TransferRef {
+    assert!(signer::address_of(from) != to, 101); 
     let token_object = object::address_to_object<Token404>(token_address);
     let collection_object = token::collection_object<Token404>(token_object);
-    // if (collection::count)
     let token404 = borrow_global<Token404>(token_address);
-    object::enable_ungated_transfer(&token404.transfer_ref);
+    let nft_linear_transfer_ref = object::generate_linear_transfer_ref(&token404.transfer_ref);
+    object::transfer_with_ref(nft_linear_transfer_ref, to);
     object::transfer<Token404>(from, token_object, to);
-    object::disable_ungated_transfer(&token404.transfer_ref);
+    let (flag, index) = smart_vector::index_of<OwnerInfo>(&borrow_global<Token404Info>(object::object_address(&collection_object)).holders, &OwnerInfo {
+      owner: signer::address_of(from),
+      token: token_object,
+    });
+    assert!(flag == true, 101);
+    let holder = smart_vector::borrow_mut<OwnerInfo>(&mut borrow_global_mut<Token404Info>(object::object_address(&collection_object)).holders, index);
+    holder.owner = to;
+    let metadata_address = get_fa_metadata_address(object::object_address(&collection_object));
+    let metadata_object = object::address_to_object<Metadata>(metadata_address);
+    let from_store = primary_fungible_store::ensure_primary_store_exists(signer::address_of(from), metadata_object);
+    let to_store = primary_fungible_store::ensure_primary_store_exists(to, metadata_object);
+    let fa_transfer_ref = &borrow_global<Collection404TransferRef>(metadata_address).fa_transfer_ref; 
+    let fa_from = fungible_asset::withdraw_with_ref(fa_transfer_ref, from_store, ONE_FA_VALUE);
+    fungible_asset::deposit_with_ref(fa_transfer_ref, to_store, fa_from);
+  }
+
+  #[test_only]
+  fun setup_test() {
+    genesis::setup();
+    randomness::initialize_for_testing(&account::create_account_for_test(@0x1));
+    init_module(&account::create_account_for_test(@test));
+  }
+
+  #[test_only]
+  fun get_token_owns<T: key>(collection: Object<Collection>, store: Object<T>): u64 acquires Token404Info {
+    let metadata = fungible_asset::store_metadata<T>(store);
+    let owner = object::owner<T>(store);
+    // let collection = borrow_global<Collection404>(object::object_address(&metadata)).collection;
+    let token_owns: u64 = 0;
+    for (i in 0..smart_vector::length<OwnerInfo>(&borrow_global<Token404Info>(object::object_address(&collection)).holders)) {
+      let holder = smart_vector::borrow<OwnerInfo>(&borrow_global<Token404Info>(object::object_address(&collection)).holders, i);
+      if (holder.owner == owner) {
+        token_owns = token_owns + 1;
+      }
+    };
+    token_owns
+  }
+  #[test(user = @0xabcd)]
+  fun test_withdraw_and_deposit(user: &signer) acquires TokenFunctionInfo, Token404Info, Collection404, Token404, Collection404TransferRef {
+    setup_test();
+    account::create_account_for_test(signer::address_of(user));
+    let test = &account::create_account_for_test(@test);
+    let collection_address = create_collection_interal(
+      user,
+      string::utf8(b"a collection"),
+      100,
+      string::utf8(b"a name"),
+      option::none<Royalty>(),
+      string::utf8(b"https://example.com"),
+      string::utf8(b"EX"),
+      string::utf8(b"https://example.com/favicon.ico")
+    );
+    mint_404_in_collection(
+      user,
+      collection_address,
+      string::utf8(b"a token"),
+      string::utf8(b"token"),
+      string::utf8(b"https://example.com/token.png")
+    );
+    let metadata_address = get_fa_metadata_address(collection_address);
+    let collection404 = borrow_global<Collection404>(metadata_address);
+    let metadata = fungible_asset::mint_ref_metadata(&collection404.mint_ref);
+    let collection = collection404.collection;
+    let test_store = ensure_primary_store_exists(@test, metadata);
+    let user_store = ensure_primary_store_exists(signer::address_of(user), metadata);
+    assert!(get_token_owns(collection, test_store) == 1, 1);
+
+    let fa_transfer_ref = &borrow_global<Collection404TransferRef>(metadata_address).fa_transfer_ref;
+    let fa = withdraw(test_store, ONE_FA_VALUE, fa_transfer_ref);
+    deposit(user_store, fa, fa_transfer_ref);
+    // fungible_asset::transfer_with_ref(&collection404.fa_transfer_ref, test_store, user_store, ONE_FA_VALUE);
+
+    assert!(get_token_owns(collection, test_store) == 0, 1);
+    assert!(get_token_owns(collection, user_store) == 1, 1);
   }
 }

@@ -10,7 +10,7 @@ module swap::liquidity_pool_tests {
 
     #[test(lp_1 = @0xcafe, lp_2 = @0xdead)]
     fun test_e2e_volatile(lp_1: &signer, lp_2: &signer) {
-        test_helpers::set_up(lp_1);
+        test_helpers::set_up(&aptos_framework::account::create_account_for_test(@deployer));
         let is_stable = false;
         let (pool, tokens_2, tokens_1) = create_pool(lp_1, is_stable);
 
@@ -87,7 +87,7 @@ module swap::liquidity_pool_tests {
 
     #[test(lp_1 = @0xcafe)]
     fun test_e2e_stable(lp_1: &signer) {
-        test_helpers::set_up(lp_1);
+        test_helpers::set_up(&aptos_framework::account::create_account_for_test(@deployer));
         let is_stable = true;
         let (pool, tokens_2, tokens_1) = create_pool(lp_1, is_stable);
         add_liquidity(lp_1, &mut tokens_1, &mut tokens_2, 100000, 200000, is_stable);
