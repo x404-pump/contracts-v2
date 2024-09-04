@@ -1,5 +1,5 @@
 #[test_only]
-module test::test_test {
+module aptos_404::tokenized_nfts_test {
     use std::option;
     use std::signer;
     use std::string;
@@ -11,25 +11,25 @@ module test::test_test {
     use aptos_framework::randomness;
     use aptos_token_objects::collection::Collection;
     use aptos_token_objects::royalty::Royalty;
-    use test::test::{init_module_for_test, DispatchFunctionInfo, MetadataManager, FAManagedRef, HoldersInfo,
+    use aptos_404::tokenized_nfts::{init_module_for_test, DispatchFunctionInfo, MetadataManager, FAManagedRef, HoldersInfo,
         create_collection_for_test, mint, get_fa_metadata_address_for_test,
         get_collection_404_metadata_for_test, get_collection_404_collection_for_test,
         get_token_balance, transfer, mint_for_test
     };
 
     const ONE_FA_VALUE: u64 = 100_000_000;
-    use test::test;
+    use aptos_404::tokenized_nfts;
 
     fun setup_test() {
         genesis::setup();
         randomness::initialize_for_testing(&account::create_account_for_test(@0x1));
-        init_module_for_test(&account::create_account_for_test(@test));
+        init_module_for_test(&account::create_account_for_test(@aptos_404));
     }
     #[test(user = @0xabcd)]
     fun test_dispatch_withdraw_and_deposit(user: &signer) {
         setup_test();
         account::create_account_for_test(signer::address_of(user));
-        let test = &account::create_account_for_test(@test);
+        let test = &account::create_account_for_test(@aptos_404);
         let collection_address = create_collection_for_test(
             user,
             string::utf8(b"a collection"),
@@ -50,7 +50,7 @@ module test::test_test {
         let metadata_address = get_fa_metadata_address_for_test(collection_address);
         let metadata = get_collection_404_metadata_for_test(metadata_address);
         let collection = get_collection_404_collection_for_test(metadata_address);
-        let test_store = ensure_primary_store_exists(@test, metadata);
+        let test_store = ensure_primary_store_exists(@aptos_404, metadata);
         let user_store = ensure_primary_store_exists(signer::address_of(user), metadata);
         assert!(get_token_balance(collection, test_store) == 1, 1);
 
@@ -69,7 +69,7 @@ module test::test_test {
     fun test_transfer_404(user: &signer) {
         setup_test();
         account::create_account_for_test(signer::address_of(user));
-        let test = &account::create_account_for_test(@test);
+        let test = &account::create_account_for_test(@aptos_404);
         let collection_address = create_collection_for_test(
             user,
             string::utf8(b"a collection"),
@@ -90,7 +90,7 @@ module test::test_test {
         let metadata_address = get_fa_metadata_address_for_test(collection_address);
         let metadata = get_collection_404_metadata_for_test(metadata_address);
         let collection = get_collection_404_collection_for_test(metadata_address);
-        let test_store = ensure_primary_store_exists(@test, metadata);
+        let test_store = ensure_primary_store_exists(@aptos_404, metadata);
         let user_store = ensure_primary_store_exists(signer::address_of(user), metadata);
         assert!(get_token_balance(collection, test_store) == 1, 1);
         std::debug::print(&string::utf8(b"token address"));

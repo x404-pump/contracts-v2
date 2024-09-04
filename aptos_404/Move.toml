@@ -1,14 +1,14 @@
 [package]
-name = "x404"
+name = "aptos_404"
 version = "1.0.0"
 authors = []
 upgrade_policy = "compatible"
 
 [addresses]
-test = "_"
+aptos_404 = "_"
 
 [dev-addresses]
-test = "6b5dd370b613d3aa9761aefd65d590136d87cc3d0369b0f14f9cabc83d5b9fb1"
+aptos_404 = "6b5dd370b613d3aa9761aefd65d590136d87cc3d0369b0f14f9cabc83d5b9fb1"
 
 [dependencies.AptosFramework]
 git = "https://github.com/aptos-labs/aptos-core.git"
