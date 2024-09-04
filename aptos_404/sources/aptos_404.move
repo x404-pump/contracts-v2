@@ -1,4 +1,4 @@
-module test::test {
+module aptos_404::tokenized_nfts {
   use std::signer;
   use std::string::{Self, String};
   use std::option::{Self, Option};
@@ -48,12 +48,12 @@ module test::test {
   fun init_module(account_signer: &signer) {
     let deposit_override = function_info::new_function_info(
       account_signer, 
-      string::utf8(b"test"), 
+      string::utf8(b"tokenized_nfts"),
       string::utf8(b"deposit")
     );
     let withdraw_override = function_info::new_function_info(
-      account_signer, 
-      string::utf8(b"test"), 
+      account_signer,
+      string::utf8(b"tokenized_nfts"),
       string::utf8(b"withdraw")
     );
     let token_function_info = DispatchFunctionInfo {
@@ -125,8 +125,8 @@ module test::test {
       let nft = holder.token;
       let token404 = borrow_global<TokenManager>(object::object_address(&nft));
       let nft_linear_transfer_ref = object::generate_linear_transfer_ref(&token404.transfer_ref);
-      object::transfer_with_ref(nft_linear_transfer_ref, @test);
-      holder.owner = @test;
+      object::transfer_with_ref(nft_linear_transfer_ref, @aptos_404);
+      holder.owner = @aptos_404;
     };
     smart_vector::destroy<u64>(index_vector);
 
@@ -153,7 +153,7 @@ module test::test {
     let index_vector = smart_vector::new<u64>();
     for (i in 0..smart_vector::length<OwnerInfo>(&borrow_global<HoldersInfo>(object::object_address(&collection)).holders)) {
       let holder = smart_vector::borrow<OwnerInfo>(&borrow_global<HoldersInfo>(object::object_address(&collection)).holders, i);
-      if (holder.owner == @test) {
+      if (holder.owner == @aptos_404) {
         smart_vector::push_back(&mut index_vector, i);
       }
     };
@@ -203,7 +203,7 @@ module test::test {
     );
     let mint_ref = fungible_asset::generate_mint_ref(&metadata_object_constructor_ref);
     let fa_transfer_ref = fungible_asset::generate_transfer_ref(&metadata_object_constructor_ref);
-    let function_override = borrow_global<DispatchFunctionInfo>(@test);
+    let function_override = borrow_global<DispatchFunctionInfo>(@aptos_404);
     dispatchable_fungible_asset::register_dispatch_functions(
       &metadata_object_constructor_ref,
       option::some(function_override.withdraw_override),
@@ -251,14 +251,14 @@ module test::test {
     });
     let nft_transfer_ref = &borrow_global<TokenManager>(signer::address_of(&nft_signer)).transfer_ref;
     let nft_object = object::object_from_constructor_ref<TokenManager>(&nft_constructor_ref);
-    object::transfer<TokenManager>(creator, nft_object, @test);
+    object::transfer<TokenManager>(creator, nft_object, @aptos_404);
     object::disable_ungated_transfer(nft_transfer_ref);
     smart_vector::push_back(&mut borrow_global_mut<HoldersInfo>(collection_address).holders, OwnerInfo {
-      owner: @test,
+      owner: @aptos_404,
       token: nft_object,
     });
     let metadata_address = get_fa_metadata_address(collection_address);
-    primary_fungible_store::mint(&borrow_global<MetadataManager>(metadata_address).mint_ref, @test, ONE_FA_VALUE);
+    primary_fungible_store::mint(&borrow_global<MetadataManager>(metadata_address).mint_ref, @aptos_404, ONE_FA_VALUE);
     signer::address_of(&nft_signer)
   }
 
