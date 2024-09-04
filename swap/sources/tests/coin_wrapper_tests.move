@@ -7,7 +7,7 @@ module swap::coin_wrapper_tests {
     use swap::test_helpers;
     use std::signer;
 
-    #[test(user = @0x1, deployer = @0xcafe)]
+    #[test(user = @0x1, deployer = @deployer)]
     fun test_e2e(user: &signer, deployer: &signer) {
         test_helpers::set_up(deployer);
         account::create_account_for_test(signer::address_of(user));
