@@ -8,7 +8,7 @@ upgrade_policy = "compatible"
 aptos_404 = "_"
 
 [dev-addresses]
-aptos_404 = "6b5dd370b613d3aa9761aefd65d590136d87cc3d0369b0f14f9cabc83d5b9fb1"
+aptos_404 = "c3084eb39877ded56fdecaee9c469c15332392fb3cec7c21a937d7d355698aa0"
 
 [dependencies.AptosFramework]
 git = "https://github.com/aptos-labs/aptos-core.git"

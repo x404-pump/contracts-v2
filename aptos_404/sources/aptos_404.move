@@ -7,6 +7,7 @@ module aptos_404::tokenized_nfts {
   use aptos_framework::object::{Self, Object, TransferRef};
   use aptos_framework::primary_fungible_store::{Self};
   use aptos_framework::fungible_asset::{Self, FungibleAsset, Metadata, TransferRef as FungibleTransferRef, MintRef};
+  use aptos_framework::event::{Self};
   use aptos_token_objects::collection::{Self, Collection};
   use aptos_token_objects::token::{Self, Token};
   use aptos_token_objects::royalty::{Self, Royalty};
@@ -15,6 +16,25 @@ module aptos_404::tokenized_nfts {
 
   const DECIMALs: u8 = 8;
   const ONE_FA_VALUE: u64 = 100_000_000;
+
+  #[event]
+  struct CollectionCreated has drop, store {
+    collection_address: address,
+    fa_address: address,
+  }
+
+  #[event]
+  struct TokenMinted has drop, store {
+    collection_address: address,
+    token_address: address,
+  }
+
+  #[event]
+  struct TokenTransfered has drop, store {
+    amount: u64,
+    from: address,
+    to: address,
+  }
 
   struct TokenManager has key {
     collection: Object<Collection>,
@@ -93,7 +113,7 @@ module aptos_404::tokenized_nfts {
     object::create_object_address(&creator, *string::bytes(&metadata_seed))
   }
 
-  #[lint::allow_unsafe_randomness]  
+  #[lint::allow_unsafe_randomness]
   public fun withdraw<T: key>(
     store: Object<T>,
     amount: u64,
@@ -225,6 +245,13 @@ module aptos_404::tokenized_nfts {
     move_to(&collection_signer, HoldersInfo {
       holders: smart_vector::new<OwnerInfo>(),
     });
+
+    event::emit<CollectionCreated>(CollectionCreated {
+      collection_address: object::address_from_constructor_ref(&collection_constructor_ref),
+      fa_address: object::address_from_constructor_ref(&metadata_object_constructor_ref),
+
+    });
+
     object::address_from_constructor_ref(&collection_constructor_ref)
   }
 
@@ -259,6 +286,11 @@ module aptos_404::tokenized_nfts {
     });
     let metadata_address = get_fa_metadata_address(collection_address);
     primary_fungible_store::mint(&borrow_global<MetadataManager>(metadata_address).mint_ref, @aptos_404, ONE_FA_VALUE);
+
+    event::emit<TokenMinted>(TokenMinted {
+      collection_address,
+      token_address: signer::address_of(&nft_signer)
+    });
     signer::address_of(&nft_signer)
   }
 
