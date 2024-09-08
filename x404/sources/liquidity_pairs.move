@@ -150,14 +150,12 @@ module bonding_curve_launchpad::liquidity_pairs {
     /// Creates a unique liquidity pair between a given FA and APT.
     /// Only callable from `bonding_curve_launchpad`.
     public(friend) fun register_liquidity_pair(
-        name: String,
-        symbol: String,
+        collection_address: address,
         transfer_ref: &TransferRef,
         swapper: &signer,
         fa_object_metadata: Object<Metadata>,
         apt_amount_in: u64,
-        fa_minted: FungibleAsset,
-        fa_initial_liquidity: u128
+        fa_initial_liquidity: FungibleAsset,
     ) acquires Pairs, LiquidityPair {
         // Only allow for creation of new APT-FA pairs.
         let does_already_exist = object::is_object(get_pair_obj_address(name, symbol));
@@ -178,7 +176,7 @@ module bonding_curve_launchpad::liquidity_pairs {
         // for *only* it's own reserves.
         let fa_store_obj_constructor = object::create_object(@bonding_curve_launchpad);
         let fa_store = fungible_asset::create_store(&fa_store_obj_constructor, fa_object_metadata);
-        fungible_asset::deposit(fa_store, fa_minted);
+        fungible_asset::deposit(fa_store, fa_initial_liquidity);
 
         // Define and store the state of the liquidity pair as:
         // Reserves, FA store, global frozen status (`is_frozen`), and enabled trading (`is_enabled`).
@@ -190,7 +188,7 @@ module bonding_curve_launchpad::liquidity_pairs {
                 extend_ref: liquidity_pair_extend_ref,
                 is_enabled: true,
                 is_frozen: true,
-                fa_reserves: fa_initial_liquidity,
+                fa_reserves: (fungible_asset::amount(&fa_initial_liquidity) as u128),
                 apt_reserves: INITIAL_VIRTUAL_APT_LIQUIDITY,
                 fa_store
             }
@@ -198,7 +196,7 @@ module bonding_curve_launchpad::liquidity_pairs {
         event::emit(
             LiquidityPairCreated {
                 fa_object_metadata,
-                initial_fa_reserves: fa_initial_liquidity,
+                initial_fa_reserves: (fungible_asset::amount(&fa_initial_liquidity) as u128),
                 initial_apt_reserves: INITIAL_VIRTUAL_APT_LIQUIDITY
             }
         );

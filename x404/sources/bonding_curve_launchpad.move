@@ -135,8 +135,7 @@ module bonding_curve_launchpad::bonding_curve_launchpad {
     public entry fun create_fa_pair(
         creator: &signer,
         apt_amount_in: u64,
-        name: String,
-        symbol: String,
+        collection_address: address,
         max_supply: u128,
         decimals: u8,
         icon_uri: String,
@@ -150,8 +149,7 @@ module bonding_curve_launchpad::bonding_curve_launchpad {
         let transfer_ref = &borrow_global<FAController>(fa_address).transfer_ref;
         // Create the liquidity pair between APT and the new FA. Include the initial creator swap, if needed.
         liquidity_pairs::register_liquidity_pair(
-            name,
-            symbol,
+            collection_address,
             transfer_ref,
             creator,
             fa_metadata_obj,
