@@ -4,15 +4,21 @@ module aptos_404::tokenized_nfts {
   use std::option::{Self, Option};
   use std::vector::{Self};
   use aptos_std::smart_vector::{Self, SmartVector};
-  use aptos_framework::object::{Self, Object, TransferRef};
+  use aptos_framework::object::{Self, Object, TransferRef, ExtendRef};
   use aptos_framework::primary_fungible_store::{Self};
-  use aptos_framework::fungible_asset::{Self, FungibleAsset, Metadata, TransferRef as FungibleTransferRef, MintRef};
+  use aptos_framework::fungible_asset::{Self, FungibleAsset, Metadata, TransferRef as FungibleTransferRef, MintRef,
+    amount
+  };
   use aptos_framework::event::{Self};
   use aptos_token_objects::collection::{Self, Collection};
   use aptos_token_objects::token::{Self, Token};
   use aptos_token_objects::royalty::{Self, Royalty};
   use aptos_framework::function_info::{Self, FunctionInfo};
+  use aptos_framework::randomness::{Self};
   use aptos_framework::dispatchable_fungible_asset::{Self};
+
+  #[test_only]
+  friend aptos_404::tokenized_nfts_test;
 
   const DECIMALs: u8 = 8;
   const ONE_FA_VALUE: u64 = 100_000_000;
@@ -36,21 +42,24 @@ module aptos_404::tokenized_nfts {
     to: address,
   }
 
+  // store under nfts address
   struct TokenManager has key {
     collection: Object<Collection>,
     transfer_ref: TransferRef,
   }
 
-  // store in metadata
+  // store under metadata address
   struct MetadataManager has key {
     collection: Object<Collection>,
     mint_ref: MintRef,
   }
 
+  // store under metadata address
   struct FAManagedRef has key {
     fa_transfer_ref: FungibleTransferRef
   }
 
+  // store under protocol address
   struct DispatchFunctionInfo has key {
     deposit_override: FunctionInfo,
     withdraw_override: FunctionInfo,
@@ -61,8 +70,24 @@ module aptos_404::tokenized_nfts {
     token: Object<TokenManager>,
   }
 
+  // store under collection address
   struct HoldersInfo has key {
     holders: SmartVector<OwnerInfo>,
+  }
+
+  // store under collection address
+  struct CollectionInfo has key {
+    extend_ref: ExtendRef,
+  }
+
+  struct CommitedWithdrawInfo has key {
+    permutation: SmartVector<u64>,
+    revealed: bool,
+  }
+
+  struct CommitedDepositInfo has key {
+    permutation: SmartVector<u64>,
+    revealed: bool,
   }
 
   fun init_module(account_signer: &signer) {
@@ -113,81 +138,98 @@ module aptos_404::tokenized_nfts {
     object::create_object_address(&creator, *string::bytes(&metadata_seed))
   }
 
-  #[lint::allow_unsafe_randomness]
+  fun get_amount_withdrawn<T: key>(store: Object<T>, amount: u64): u64 {
+    let balance_before = fungible_asset::balance<T>(store);
+    let balance_after = balance_before - amount;
+    let amount_nft_withdrawn = balance_before / ONE_FA_VALUE - balance_after / ONE_FA_VALUE;
+    amount_nft_withdrawn
+  }
+
+  fun get_amount_deposited<T: key>(store: Object<T>, amount: u64): u64 {
+    let balance_before = fungible_asset::balance<T>(store);
+    let balance_after = balance_before + amount;
+    let amount_nft_deposited = balance_after / ONE_FA_VALUE - balance_before / ONE_FA_VALUE;
+    amount_nft_deposited
+  }
+
   public fun withdraw<T: key>(
     store: Object<T>,
     amount: u64,
     transfer_ref: &FungibleTransferRef,
-  ): FungibleAsset acquires MetadataManager, HoldersInfo, TokenManager {
-    let metadata = fungible_asset::store_metadata<T>(store);
-    let balance_before = fungible_asset::balance<T>(store);
+  ): FungibleAsset acquires MetadataManager, HoldersInfo, TokenManager, CommitedWithdrawInfo {
     let owner = object::owner<T>(store);
-    let fa = fungible_asset::withdraw_with_ref<T>(
-      transfer_ref,
-      store,
-      amount,
-    );
-    let balance_after = fungible_asset::balance<T>(store);
-    let amount_nft_withdrawn = balance_before / ONE_FA_VALUE - balance_after / ONE_FA_VALUE;
+    let metadata = fungible_asset::store_metadata<T>(store);
+    let metadata_manager = borrow_global<MetadataManager>(object::object_address<Metadata>(&metadata));
+    let collection_address = object::object_address<Collection>(&metadata_manager.collection);
+    let commited_withdraw_info = borrow_global_mut<CommitedWithdrawInfo>(collection_address);
+    assert!(commited_withdraw_info.revealed == false, 101);
 
-    let collection = borrow_global<MetadataManager>(object::object_address(&metadata)).collection;
-    let index_vector = smart_vector::new<u64>();
-    for (i in 0..smart_vector::length<OwnerInfo>(&borrow_global<HoldersInfo>(object::object_address(&collection)).holders)) {
-      let holder = smart_vector::borrow<OwnerInfo>(&borrow_global<HoldersInfo>(object::object_address(&collection)).holders, i);
-      if (holder.owner == owner) {
-        smart_vector::push_back(&mut index_vector, i);
-      }
-    };
-    for (i in 0..amount_nft_withdrawn) {
-      let index = aptos_framework::randomness::u64_range(0, smart_vector::length<u64>(&index_vector));
-      let holder_index = smart_vector::remove<u64>(&mut index_vector, index);
-      let holder = smart_vector::borrow_mut<OwnerInfo>(&mut borrow_global_mut<HoldersInfo>(object::object_address(&collection)).holders, holder_index);
+    let amount_nft_withdrawn = get_amount_withdrawn(store, amount);
+    let metadata = fungible_asset::store_metadata<T>(store);
+
+    let collection_object = borrow_global<MetadataManager>(object::object_address(&metadata)).collection;
+    let collection_address = object::object_address(&collection_object);
+    let collection_supply_option = collection::count<Collection>(collection_object);
+    let collection_supply = option::extract(&mut collection_supply_option);
+    for (i in 0..collection_supply) {
+      if (amount_nft_withdrawn == 0) break;
+      let index = smart_vector::borrow(&commited_withdraw_info.permutation, i);
+      let holder = smart_vector::borrow_mut<OwnerInfo>(&mut borrow_global_mut<HoldersInfo>(collection_address).holders, *index);
+      if (holder.owner != owner) continue;
       let nft = holder.token;
       let token404 = borrow_global<TokenManager>(object::object_address(&nft));
       let nft_linear_transfer_ref = object::generate_linear_transfer_ref(&token404.transfer_ref);
       object::transfer_with_ref(nft_linear_transfer_ref, @aptos_404);
       holder.owner = @aptos_404;
+      amount_nft_withdrawn = amount_nft_withdrawn - 1;
     };
-    smart_vector::destroy<u64>(index_vector);
+    assert!(amount_nft_withdrawn == 0, 102);
 
-    fa
+    fungible_asset::withdraw_with_ref<T>(
+      transfer_ref,
+      store,
+      amount,
+    )
   }
 
-  #[lint::allow_unsafe_randomness]
   public fun deposit<T: key>(
     store: Object<T>,
     fa: FungibleAsset,
     transfer_ref: &FungibleTransferRef,
-  ) acquires TokenManager, HoldersInfo, MetadataManager {
-    let metadata = fungible_asset::store_metadata<T>(store);
-    let balance_before = fungible_asset::balance<T>(store);
+  ) acquires TokenManager, HoldersInfo, MetadataManager, CommitedDepositInfo {
     let owner = object::owner<T>(store);
-    fungible_asset::deposit_with_ref<T>(
-      transfer_ref,
-      store,
-      fa,
-    );
-    let balance_after = fungible_asset::balance<T>(store);
-    let amount_nft_deposited = balance_after / ONE_FA_VALUE - balance_before / ONE_FA_VALUE;
-    let collection = borrow_global<MetadataManager>(object::object_address(&metadata)).collection;
-    let index_vector = smart_vector::new<u64>();
-    for (i in 0..smart_vector::length<OwnerInfo>(&borrow_global<HoldersInfo>(object::object_address(&collection)).holders)) {
-      let holder = smart_vector::borrow<OwnerInfo>(&borrow_global<HoldersInfo>(object::object_address(&collection)).holders, i);
-      if (holder.owner == @aptos_404) {
-        smart_vector::push_back(&mut index_vector, i);
-      }
-    };
-    for (i in 0..amount_nft_deposited) {
-      let index = aptos_framework::randomness::u64_range(0, smart_vector::length<u64>(&index_vector));
-      let holder_index = smart_vector::remove<u64>(&mut index_vector, index);
-      let holder = smart_vector::borrow_mut<OwnerInfo>(&mut borrow_global_mut<HoldersInfo>(object::object_address(&collection)).holders, holder_index);
+    let metadata = fungible_asset::store_metadata<T>(store);
+    let metadata_manager = borrow_global<MetadataManager>(object::object_address<Metadata>(&metadata));
+    let collection_address = object::object_address<Collection>(&metadata_manager.collection);
+    let commited_deposit_info = borrow_global_mut<CommitedDepositInfo>(collection_address);
+    assert!(commited_deposit_info.revealed == false, 101);
+
+    let amount_nft_deposited = get_amount_deposited(store, fungible_asset::amount(&fa));
+    let metadata = fungible_asset::store_metadata<T>(store);
+    let owner = object::owner<T>(store);
+    let collection_object = borrow_global<MetadataManager>(object::object_address(&metadata)).collection;
+    let collection_address = object::object_address(&collection_object);
+    let collection_supply_option = collection::count<Collection>(collection_object);
+    let collection_supply = option::extract(&mut collection_supply_option);
+
+    for (i in 0..collection_supply) {
+      if (amount_nft_deposited == 0) break;
+      let index = smart_vector::borrow(&commited_deposit_info.permutation, i);
+      let holder = smart_vector::borrow_mut<OwnerInfo>(&mut borrow_global_mut<HoldersInfo>(collection_address).holders, *index);
+      if (holder.owner != @aptos_404) continue;
       let nft = holder.token;
       let token404 = borrow_global<TokenManager>(object::object_address(&nft));
       let nft_linear_transfer_ref = object::generate_linear_transfer_ref(&token404.transfer_ref);
       object::transfer_with_ref(nft_linear_transfer_ref, owner);
       holder.owner = owner;
+      amount_nft_deposited = amount_nft_deposited - 1;
     };
-    smart_vector::destroy<u64>(index_vector);
+    assert!(amount_nft_deposited == 0, 102);
+    fungible_asset::deposit_with_ref<T>(
+      transfer_ref,
+      store,
+      fa,
+    );
   }
 
   // fun get_collection_address(creator: address, collection_name: String): address {
@@ -236,6 +278,7 @@ module aptos_404::tokenized_nfts {
     move_to(&metadata_signer, MetadataManager {
       collection: object::object_from_constructor_ref<Collection>(&collection_constructor_ref),
       mint_ref,
+
     });
     move_to(&metadata_signer, FAManagedRef {
       fa_transfer_ref
@@ -245,11 +288,12 @@ module aptos_404::tokenized_nfts {
     move_to(&collection_signer, HoldersInfo {
       holders: smart_vector::new<OwnerInfo>(),
     });
-
+    move_to(&collection_signer, CollectionInfo {
+      extend_ref: object::generate_extend_ref(&collection_constructor_ref),
+    });
     event::emit<CollectionCreated>(CollectionCreated {
       collection_address: object::address_from_constructor_ref(&collection_constructor_ref),
       fa_address: object::address_from_constructor_ref(&metadata_object_constructor_ref),
-
     });
 
     object::address_from_constructor_ref(&collection_constructor_ref)
@@ -333,6 +377,95 @@ module aptos_404::tokenized_nfts {
     let fa_from = fungible_asset::withdraw_with_ref(fa_transfer_ref, from_store, ONE_FA_VALUE);
     fungible_asset::deposit_with_ref(fa_transfer_ref, to_store, fa_from);
   }
+
+  fun get_collection_permuation(permutation: &mut SmartVector<u64>, collection_address: address) {
+    let collection_object = object::address_to_object<Collection>(collection_address);
+    let collection_supply_option = collection::count<Collection>(collection_object);
+    let collection_supply = option::extract(&mut collection_supply_option);
+    let random_permutation = randomness::permutation(collection_supply);
+    smart_vector::add_all<u64>(permutation, random_permutation);
+  }
+
+  fun get_collection_signer(collection_address: address): signer acquires CollectionInfo {
+    object::generate_signer_for_extending(&borrow_global<CollectionInfo>(collection_address).extend_ref)
+  }
+
+  #[randomness]
+  entry fun commit_before_withdraw(collection_address: address) acquires CollectionInfo, CommitedWithdrawInfo {
+    if (exists<CommitedWithdrawInfo>(collection_address)) {
+      let commited_withdraw_info = borrow_global_mut<CommitedWithdrawInfo>(collection_address);
+      if (commited_withdraw_info.revealed == true) {
+        get_collection_permuation(&mut commited_withdraw_info.permutation, collection_address);
+        commited_withdraw_info.revealed = false;
+      }
+    } else {
+      let collection_signer = get_collection_signer(collection_address);
+      let permutation = smart_vector::new<u64>();
+      get_collection_permuation(&mut permutation, collection_address);
+      move_to(&collection_signer, CommitedWithdrawInfo {
+        permutation,
+        revealed: false,
+      });
+    }
+  }
+
+  #[randomness]
+  entry fun commit_before_deposit(collection_address: address) acquires CollectionInfo, CommitedDepositInfo {
+    if (exists<CommitedDepositInfo>(collection_address)) {
+      let commited_deposit_info = borrow_global_mut<CommitedDepositInfo>(collection_address);
+      if (commited_deposit_info.revealed == true) {
+        get_collection_permuation(&mut commited_deposit_info.permutation, collection_address);
+        commited_deposit_info.revealed = false;
+      }
+    } else {
+      let collection_signer = get_collection_signer(collection_address);
+      let permutation = smart_vector::new<u64>();
+      get_collection_permuation(&mut permutation, collection_address);
+      move_to(&collection_signer, CommitedDepositInfo {
+        permutation,
+        revealed: false,
+      });
+    }
+  }
+
+  #[randomness]
+  public(friend) entry fun friend_commit_before_withdraw(collection_address: address) acquires CollectionInfo, CommitedWithdrawInfo {
+    if (exists<CommitedWithdrawInfo>(collection_address)) {
+      let commited_withdraw_info = borrow_global_mut<CommitedWithdrawInfo>(collection_address);
+      if (commited_withdraw_info.revealed == true) {
+        get_collection_permuation(&mut commited_withdraw_info.permutation, collection_address);
+        commited_withdraw_info.revealed = false;
+      }
+    } else {
+      let collection_signer = get_collection_signer(collection_address);
+      let permutation = smart_vector::new<u64>();
+      get_collection_permuation(&mut permutation, collection_address);
+      move_to(&collection_signer, CommitedWithdrawInfo {
+        permutation,
+        revealed: false,
+      });
+    }
+  }
+
+  #[randomness]
+  public(friend) entry fun friend_commit_before_deposit(collection_address: address) acquires CollectionInfo, CommitedDepositInfo {
+    if (exists<CommitedDepositInfo>(collection_address)) {
+      let commited_deposit_info = borrow_global_mut<CommitedDepositInfo>(collection_address);
+      if (commited_deposit_info.revealed == true) {
+        get_collection_permuation(&mut commited_deposit_info.permutation, collection_address);
+        commited_deposit_info.revealed = false;
+      }
+    } else {
+      let collection_signer = get_collection_signer(collection_address);
+      let permutation = smart_vector::new<u64>();
+      get_collection_permuation(&mut permutation, collection_address);
+      move_to(&collection_signer, CommitedDepositInfo {
+        permutation,
+        revealed: false,
+      });
+    }
+  }
+
 
   #[test_only]
   public fun init_module_for_test(account_signer: &signer) {
