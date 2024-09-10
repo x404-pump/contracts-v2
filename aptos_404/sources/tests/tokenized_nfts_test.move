@@ -14,7 +14,7 @@ module aptos_404::tokenized_nfts_test {
     use aptos_404::tokenized_nfts::{init_module_for_test, DispatchFunctionInfo, MetadataManager, FAManagedRef, HoldersInfo,
         create_collection_for_test, mint, get_fa_metadata_address_for_test,
         get_collection_404_metadata_for_test, get_collection_404_collection_for_test,
-        get_token_balance, transfer, mint_for_test, friend_commit_before_withdraw, friend_commit_before_deposit,
+        get_token_balance, transfer, mint_for_test, commit_before_withdraw, commit_before_deposit,
     };
 
     const ONE_FA_VALUE: u64 = 100_000_000;
@@ -55,8 +55,8 @@ module aptos_404::tokenized_nfts_test {
         assert!(get_token_balance(collection, test_store) == 1, 1);
 
         // let fa_transfer_ref = &borrow_global<Collection404TransferRef>(metadata_address).fa_transfer_ref;
-        friend_commit_before_withdraw(collection_address);
-        friend_commit_before_deposit(collection_address);
+        commit_before_withdraw(collection_address);
+        commit_before_deposit(collection_address);
         let fa = dispatchable_fungible_asset::withdraw(test, test_store, ONE_FA_VALUE);
         dispatchable_fungible_asset::deposit(user_store, fa);
 
