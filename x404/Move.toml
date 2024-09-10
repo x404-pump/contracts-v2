@@ -15,5 +15,11 @@ git = "https://github.com/aptos-labs/aptos-core.git"
 rev = "mainnet"
 subdir = "aptos-move/framework/aptos-framework"
 
-[dependencies.swap]
-local = "../swap"
+[dependencies.AptosTokenObjects]
+git = "https://github.com/aptos-labs/aptos-core.git"
+rev = "mainnet"
+subdir = "aptos-move/framework/aptos-token-objects"
+
+[dependencies]
+swap = { local = "../swap" }
+aptos_404 = { local = "../aptos_404" }

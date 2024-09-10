@@ -6,11 +6,14 @@ module bonding_curve_launchpad::liquidity_pairs {
     use aptos_framework::coin;
     use aptos_framework::aptos_account;
     use aptos_framework::aptos_coin::{AptosCoin};
-    use aptos_framework::object::{Self, Object, ExtendRef};
+    use aptos_framework::dispatchable_fungible_asset;
+    use aptos_framework::object::{Self, Object, ExtendRef, ConstructorRef};
     use aptos_framework::event;
     use aptos_framework::fungible_asset;
     use aptos_framework::fungible_asset::{Metadata, TransferRef, FungibleAsset, FungibleStore};
     use aptos_framework::primary_fungible_store;
+    use aptos_404::tokenized_nfts;
+    use aptos_token_objects::collection::{Self, Collection};
     use swap::router;
     use swap::liquidity_pool;
     use swap::coin_wrapper;
@@ -61,9 +64,6 @@ module bonding_curve_launchpad::liquidity_pairs {
     }
 
     //---------------------------Structs---------------------------
-    struct Pairs has key {
-        signer_extender: ExtendRef
-    }
 
     #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
     struct LiquidityPair has store, key {
@@ -77,10 +77,6 @@ module bonding_curve_launchpad::liquidity_pairs {
 
     //---------------------------Init---------------------------
     fun init_module(account: &signer) {
-        let signer_extender = object::generate_extend_ref(
-            &object::create_sticky_object(@bonding_curve_launchpad)
-        );
-        move_to(account, Pairs { signer_extender });
     }
 
 
@@ -114,35 +110,28 @@ module bonding_curve_launchpad::liquidity_pairs {
     // Retrieve the frozen status of a given FA.
     #[view]
     public fun get_is_frozen_metadata(
-        name: String,
-        symbol: String
-    ): bool acquires Pairs, LiquidityPair {
-        assert_liquidity_pair_exists(name, symbol);
-        borrow_global<LiquidityPair>(get_pair_obj_address(name, symbol)).is_frozen
+        collection_address: address,
+    ): bool acquires LiquidityPair {
+        assert_liquidity_pair_exists(collection_address);
+        borrow_global<LiquidityPair>(get_pair_obj_address(collection_address)).is_frozen
     }
 
     // Retrieve the address of the given FA's name and symbol.
     #[view]
     public fun get_pair_obj_address(
-        name: String,
-        symbol: String
-    ): address acquires Pairs {
-        let pairs = borrow_global<Pairs>(@bonding_curve_launchpad);
-        let fa_key_seed = *string::bytes(&name);
-        vector::append(&mut fa_key_seed, b"-");
-        vector::append(&mut fa_key_seed, *string::bytes(&symbol));
+        collection_address: address
+    ): address {
         object::create_object_address(
-            &object::address_from_extend_ref(&pairs.signer_extender),
-            fa_key_seed
+            &collection_address,
+            b"Bonding-Curve-Launchpad-Pair"
         )
     }
 
     //---------------------------DEX-helpers---------------------------
     inline fun assert_liquidity_pair_exists(
-        name: String,
-        symbol: String
+        collection_address: address,
     ) {
-        let does_already_exist = object::is_object(get_pair_obj_address(name, symbol));
+        let does_already_exist = object::is_object(get_pair_obj_address(collection_address));
         assert!(does_already_exist, ELIQUIDITY_PAIR_DOES_NOT_EXIST);
     }
 
@@ -150,32 +139,26 @@ module bonding_curve_launchpad::liquidity_pairs {
     /// Creates a unique liquidity pair between a given FA and APT.
     /// Only callable from `bonding_curve_launchpad`.
     public(friend) fun register_liquidity_pair(
-        collection_address: address,
-        transfer_ref: &TransferRef,
+        collection_constructor_ref: ConstructorRef,
         swapper: &signer,
-        fa_object_metadata: Object<Metadata>,
         apt_amount_in: u64,
         fa_initial_liquidity: FungibleAsset,
-    ) acquires Pairs, LiquidityPair {
-        // Only allow for creation of new APT-FA pairs.
-        let does_already_exist = object::is_object(get_pair_obj_address(name, symbol));
-        assert!(!does_already_exist, ELIQUIDITY_PAIR_EXISTS_ALREADY);
+    ) acquires LiquidityPair {
+        let collection_address = object::address_from_constructor_ref(&collection_constructor_ref);
+        let collection_signer = object::generate_signer(&collection_constructor_ref);
+        let fa_object_metadata = fungible_asset::metadata_from_asset(&fa_initial_liquidity);
         // Every new liquidity pair will have it's information stored within an Object. This object will also be used to
         // generator signers from, for when APT or the FA needs to be transferred to and from the liquidity pair.
         // Reserves are kept on the liquidity pair object.
         // The object is identified by the unique combination of the FA's name and symbol.
-        let pairs = borrow_global<Pairs>(@bonding_curve_launchpad);
-        let pairs_signer = object::generate_signer_for_extending(&pairs.signer_extender);
-        let fa_key_seed = *string::bytes(&name);
-        vector::append(&mut fa_key_seed, b"-");
-        vector::append(&mut fa_key_seed, *string::bytes(&symbol));
-        let liquidity_pair_object = object::create_named_object(&pairs_signer, fa_key_seed);
+        let liquidity_pair_object = object::create_named_object(&collection_signer,b"Bonding-Curve-Launchpad-Pair");
         let liquidity_pair_signer = object::generate_signer(&liquidity_pair_object);
         let liquidity_pair_extend_ref = object::generate_extend_ref(&liquidity_pair_object);
         // Store all minted FA inside the liquidity_pair struct, within a Fungible Store. This object is responsible
         // for *only* it's own reserves.
         let fa_store_obj_constructor = object::create_object(@bonding_curve_launchpad);
         let fa_store = fungible_asset::create_store(&fa_store_obj_constructor, fa_object_metadata);
+        let amount = fungible_asset::amount(&fa_initial_liquidity);
         fungible_asset::deposit(fa_store, fa_initial_liquidity);
 
         // Define and store the state of the liquidity pair as:
@@ -188,7 +171,7 @@ module bonding_curve_launchpad::liquidity_pairs {
                 extend_ref: liquidity_pair_extend_ref,
                 is_enabled: true,
                 is_frozen: true,
-                fa_reserves: (fungible_asset::amount(&fa_initial_liquidity) as u128),
+                fa_reserves: (amount as u128),
                 apt_reserves: INITIAL_VIRTUAL_APT_LIQUIDITY,
                 fa_store
             }
@@ -196,28 +179,26 @@ module bonding_curve_launchpad::liquidity_pairs {
         event::emit(
             LiquidityPairCreated {
                 fa_object_metadata,
-                initial_fa_reserves: (fungible_asset::amount(&fa_initial_liquidity) as u128),
+                initial_fa_reserves: (amount as u128),
                 initial_apt_reserves: INITIAL_VIRTUAL_APT_LIQUIDITY
             }
         );
         // Optional initial swap given to the creator of the FA.
         if (apt_amount_in > 0) {
-            swap_apt_to_fa(name, symbol, transfer_ref, swapper, fa_object_metadata, apt_amount_in);
+            swap_apt_to_fa(collection_address, swapper, fa_object_metadata, apt_amount_in);
         };
     }
 
     /// Facilitate swapping between a given FA to APT.
     public(friend) fun swap_fa_to_apt(
-        name: String,
-        symbol: String,
-        transfer_ref: &TransferRef,
+        collection_address: address,
         swapper_account: &signer,
         fa_object_metadata: Object<Metadata>,
         amount_in: u64
-    ) acquires Pairs, LiquidityPair {
+    ) acquires LiquidityPair {
         // Verify the liquidity pair exists and is enabled for trading.
-        assert_liquidity_pair_exists(name, symbol);
-        let liquidity_pair = borrow_global_mut<LiquidityPair>(get_pair_obj_address(name, symbol));
+        assert_liquidity_pair_exists(collection_address);
+        let liquidity_pair = borrow_global_mut<LiquidityPair>(get_pair_obj_address(collection_address));
         assert!(liquidity_pair.is_enabled, ELIQUIDITY_PAIR_DISABLED);
         // Determine the amount received of APT, when given swapper-supplied amount_in of FA.
         let (fa_given, apt_gained, fa_updated_reserves, apt_updated_reserves) = get_amount_out(
@@ -238,9 +219,9 @@ module bonding_curve_launchpad::liquidity_pairs {
         let liquidity_pair_signer = object::generate_signer_for_extending(&liquidity_pair.extend_ref);
         let from_swapper_store = primary_fungible_store::ensure_primary_store_exists(
             swapper_address,
-            fungible_asset::transfer_ref_metadata(transfer_ref)
+            fa_object_metadata
         );
-        fungible_asset::transfer_with_ref(transfer_ref, from_swapper_store, liquidity_pair.fa_store, fa_given);
+        dispatchable_fungible_asset::transfer(swapper_account, from_swapper_store, liquidity_pair.fa_store, fa_given);
         aptos_account::transfer(&liquidity_pair_signer, swapper_address, apt_gained);
         // Record state changes to the liquidity pair's reserves, and emit changes as events.
         let former_fa_reserves = liquidity_pair.fa_reserves;
@@ -266,16 +247,14 @@ module bonding_curve_launchpad::liquidity_pairs {
 
     /// Facilitate swapping between APT to a given FA.
     public(friend) fun swap_apt_to_fa(
-        name: String,
-        symbol: String,
-        transfer_ref: &TransferRef,
+        collection_address: address,
         swapper_account: &signer,
         fa_object_metadata: Object<Metadata>,
         amount_in: u64
-    ) acquires Pairs, LiquidityPair {
+    ) acquires LiquidityPair {
         // Verify the liquidity pair exists and is enabled for trading.
-        assert_liquidity_pair_exists(name, symbol);
-        let liquidity_pair = borrow_global_mut<LiquidityPair>(get_pair_obj_address(name, symbol));
+        assert_liquidity_pair_exists(collection_address);
+        let liquidity_pair = borrow_global_mut<LiquidityPair>(get_pair_obj_address(collection_address));
         assert!(liquidity_pair.is_enabled, ELIQUIDITY_PAIR_DISABLED);
         // Determine the amount received of FA, when given swapper-supplied amount_in of APT.
         let (fa_gained, apt_given, fa_updated_reserves, apt_updated_reserves) = get_amount_out(
@@ -291,10 +270,12 @@ module bonding_curve_launchpad::liquidity_pairs {
         let liquidity_pair_address = object::address_from_extend_ref(&liquidity_pair.extend_ref);
         let to_swapper_store = primary_fungible_store::ensure_primary_store_exists(
             swapper_address,
-            fungible_asset::transfer_ref_metadata(transfer_ref)
+            fa_object_metadata
         );
         aptos_account::transfer(swapper_account, liquidity_pair_address, apt_given);
-        fungible_asset::transfer_with_ref(transfer_ref, liquidity_pair.fa_store, to_swapper_store, fa_gained);
+        tokenized_nfts::commit_before_withdraw(collection_address);
+        tokenized_nfts::commit_before_deposit(collection_address);
+        dispatchable_fungible_asset::transfer(swapper_account, liquidity_pair.fa_store, to_swapper_store, fa_gained);
         // Record state changes to the liquidity pair's reserves, and emit changes as events.
         let former_fa_reserves = liquidity_pair.fa_reserves;
         let former_apt_reserves = liquidity_pair.apt_reserves;
@@ -318,7 +299,7 @@ module bonding_curve_launchpad::liquidity_pairs {
         // Check for graduation requirements. The APT reserves must be above the pre-defined
         // threshold to allow for graduation.
         if (liquidity_pair.is_enabled && apt_updated_reserves > APT_LIQUIDITY_THRESHOLD) {
-            graduate(liquidity_pair, fa_object_metadata, transfer_ref, apt_updated_reserves, fa_updated_reserves);
+            graduate(liquidity_pair, fa_object_metadata, apt_updated_reserves, fa_updated_reserves);
         }
     }
 
@@ -330,7 +311,6 @@ module bonding_curve_launchpad::liquidity_pairs {
     fun graduate(
         liquidity_pair: &mut LiquidityPair,
         fa_object_metadata: Object<Metadata>,
-        transfer_ref: &TransferRef,
         apt_updated_reserves: u128,
         fa_updated_reserves: u128
     ) {
@@ -341,7 +321,6 @@ module bonding_curve_launchpad::liquidity_pairs {
         router::create_pool_coin<AptosCoin>(fa_object_metadata, false);
         let liquidity_pair_signer = object::generate_signer_for_extending(&liquidity_pair.extend_ref);
         add_liquidity_coin_entry_transfer_ref<AptosCoin>(
-            transfer_ref,
             &liquidity_pair_signer,
             liquidity_pair.fa_store,
             fa_object_metadata,
@@ -374,7 +353,6 @@ module bonding_curve_launchpad::liquidity_pairs {
     /// Add liquidity alternative that relies on `transfer_ref`, rather than the traditional transfer
     /// found in the swap DEX.
     fun add_liquidity_coin_entry_transfer_ref<CoinType>(
-        transfer_ref: &TransferRef,
         lp: &signer,
         fa_store: Object<FungibleStore>,
         token_2: Object<Metadata>,
@@ -400,11 +378,12 @@ module bonding_curve_launchpad::liquidity_pairs {
         // visiting `bonding_curve_launchpad` to execute the custom withdraw logic. `transfer_ref` bypasses the need to
         // return to `bonding_curve_launchpad` by not executing the custom withdraw logic.
         let optimal_1 = coin::withdraw<CoinType>(lp, optimal_amount_1);
-        let optimal_2 = fungible_asset::withdraw_with_ref(
-            transfer_ref,
-            fa_store,
-            optimal_amount_2
-        );
+        let optimal_2 = dispatchable_fungible_asset::withdraw(lp, fa_store, optimal_amount_2);
+        // let optimal_2 = fungible_asset::withdraw_with_ref(
+        //     transfer_ref,
+        //     fa_store,
+        //     optimal_amount_2
+        // );
         // Place the APT and FA into the liquidity pair.
         router::add_liquidity_coin<CoinType>(lp, optimal_1, optimal_2, is_stable);
     }
@@ -412,9 +391,5 @@ module bonding_curve_launchpad::liquidity_pairs {
     //---------------------------Tests---------------------------
     #[test_only]
     public fun initialize_for_test(deployer: &signer) {
-        let signer_extender = object::generate_extend_ref(
-            &object::create_sticky_object(@bonding_curve_launchpad)
-        );
-        move_to(deployer, Pairs { signer_extender });
     }
 }

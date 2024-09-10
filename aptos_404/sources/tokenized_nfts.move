@@ -4,7 +4,7 @@ module aptos_404::tokenized_nfts {
   use std::option::{Self, Option};
   use std::vector::{Self};
   use aptos_std::smart_vector::{Self, SmartVector};
-  use aptos_framework::object::{Self, Object, TransferRef, ExtendRef};
+  use aptos_framework::object::{Self, Object, ConstructorRef, TransferRef, ExtendRef};
   use aptos_framework::primary_fungible_store::{Self};
   use aptos_framework::fungible_asset::{Self, FungibleAsset, Metadata, TransferRef as FungibleTransferRef, MintRef,
     amount
@@ -130,7 +130,7 @@ module aptos_404::tokenized_nfts {
   }
 
   #[view]
-  fun get_fa_metadata_address(collection_address: address): address {
+  public fun get_fa_metadata_address(collection_address: address): address {
     let collection_object = object::address_to_object<Collection>(collection_address);
     let creator = collection::creator<Collection>(collection_object);
     let name = collection::name<Collection>(collection_object);
@@ -244,7 +244,7 @@ module aptos_404::tokenized_nfts {
   //   // get_collection_address(&signer::address_of(&signer::get()), fa_name)
   // }
 
-  fun create_collection_internal(creator: &signer, description: String, supply: u64, name: String, royalty: Option<Royalty>, uri: String, fa_symbol: String, fa_icon: String): address acquires DispatchFunctionInfo {
+  fun create_collection_internal(creator: &signer, description: String, supply: u64, name: String, royalty: Option<Royalty>, uri: String, fa_symbol: String, fa_icon: String): ConstructorRef acquires DispatchFunctionInfo {
 
     assert!(supply > 0 && supply <= 1_000_000, 101);
 
@@ -296,11 +296,21 @@ module aptos_404::tokenized_nfts {
       fa_address: object::address_from_constructor_ref(&metadata_object_constructor_ref),
     });
 
-    object::address_from_constructor_ref(&collection_constructor_ref)
+    (collection_constructor_ref)
   }
 
-  entry public fun create_collection(creator: &signer, description: String, supply: u64, name: String, royalty: Option<Royalty>, uri: String, fa_symbol: String, fa_icon: String) acquires DispatchFunctionInfo {
-    create_collection_internal(creator, description, supply, name, royalty, uri, fa_symbol, fa_icon);
+  public fun create_collection(creator: &signer, description: String, supply: u64, name: String, uri: String, fa_symbol: String, fa_icon: String): ConstructorRef acquires DispatchFunctionInfo {
+    create_collection_internal(creator, description, supply, name, option::none(), uri, fa_symbol, fa_icon)
+  }
+
+  public fun create_collection_and_mint(creator: &signer, description: String, supply: u64, name: String, uri: String, fa_symbol: String, fa_icon: String, descriptions: vector<String>, names: vector<String>, uris: vector<String>) : (ConstructorRef, FungibleAsset) acquires TokenManager, FAManagedRef, MetadataManager, HoldersInfo, CommitedWithdrawInfo, DispatchFunctionInfo {
+    let collection_constructor_ref = create_collection_internal(creator, description, supply, name, option::none(), uri, fa_symbol, fa_icon);
+    let collection_address = object::address_from_constructor_ref(&collection_constructor_ref);
+    mint_batch_404s_in_collection(creator, object::address_from_constructor_ref(&collection_constructor_ref), descriptions, names, uris);
+    // let transfer_ref = borrow_global<FAManagedRef>(@aptos_404).fa_transfer_ref;
+    let aptos_404_store = primary_fungible_store::ensure_primary_store_exists(@aptos_404, object::address_to_object<Metadata>(get_fa_metadata_address(collection_address)));
+    let fa = withdraw(aptos_404_store, (vector::length<String>(&descriptions) as u64) * ONE_FA_VALUE, &borrow_global<FAManagedRef>(get_fa_metadata_address(collection_address)).fa_transfer_ref);
+    (collection_constructor_ref, fa)
   }
 
   fun mint_internal(creator: &signer, collection_address: address, description: String, name: String, uri: String) : address
@@ -391,7 +401,7 @@ module aptos_404::tokenized_nfts {
   }
 
   #[randomness]
-  entry fun commit_before_withdraw(collection_address: address) acquires CollectionInfo, CommitedWithdrawInfo {
+  entry fun entry_commit_before_withdraw(collection_address: address) acquires CollectionInfo, CommitedWithdrawInfo {
     if (exists<CommitedWithdrawInfo>(collection_address)) {
       let commited_withdraw_info = borrow_global_mut<CommitedWithdrawInfo>(collection_address);
       if (commited_withdraw_info.revealed == true) {
@@ -410,7 +420,7 @@ module aptos_404::tokenized_nfts {
   }
 
   #[randomness]
-  entry fun commit_before_deposit(collection_address: address) acquires CollectionInfo, CommitedDepositInfo {
+  entry fun entry_commit_before_deposit(collection_address: address) acquires CollectionInfo, CommitedDepositInfo {
     if (exists<CommitedDepositInfo>(collection_address)) {
       let commited_deposit_info = borrow_global_mut<CommitedDepositInfo>(collection_address);
       if (commited_deposit_info.revealed == true) {
@@ -428,8 +438,8 @@ module aptos_404::tokenized_nfts {
     }
   }
 
-  #[randomness]
-  public(friend) entry fun friend_commit_before_withdraw(collection_address: address) acquires CollectionInfo, CommitedWithdrawInfo {
+  #[lint::allow_unsafe_randomness]
+  public fun commit_before_withdraw(collection_address: address) acquires CollectionInfo, CommitedWithdrawInfo {
     if (exists<CommitedWithdrawInfo>(collection_address)) {
       let commited_withdraw_info = borrow_global_mut<CommitedWithdrawInfo>(collection_address);
       if (commited_withdraw_info.revealed == true) {
@@ -447,8 +457,8 @@ module aptos_404::tokenized_nfts {
     }
   }
 
-  #[randomness]
-  public(friend) entry fun friend_commit_before_deposit(collection_address: address) acquires CollectionInfo, CommitedDepositInfo {
+  #[lint::allow_unsafe_randomness]
+  public fun commit_before_deposit(collection_address: address) acquires CollectionInfo, CommitedDepositInfo {
     if (exists<CommitedDepositInfo>(collection_address)) {
       let commited_deposit_info = borrow_global_mut<CommitedDepositInfo>(collection_address);
       if (commited_deposit_info.revealed == true) {
@@ -465,7 +475,6 @@ module aptos_404::tokenized_nfts {
       });
     }
   }
-
 
   #[test_only]
   public fun init_module_for_test(account_signer: &signer) {
@@ -474,7 +483,8 @@ module aptos_404::tokenized_nfts {
 
   #[test_only]
   public fun create_collection_for_test(creator: &signer, description: String, supply: u64, name: String, royalty: Option<Royalty>, uri: String, fa_symbol: String, fa_icon: String): address acquires DispatchFunctionInfo {
-    create_collection_internal(creator, description, supply, name, royalty, uri, fa_symbol, fa_icon)
+    let ref = create_collection_internal(creator, description, supply, name, royalty, uri, fa_symbol, fa_icon);
+    object::address_from_constructor_ref(&ref)
   }
 
   #[test_only]
