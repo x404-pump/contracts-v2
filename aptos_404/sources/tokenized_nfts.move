@@ -39,13 +39,17 @@ module aptos_404::tokenized_nfts {
   #[event]
   struct CollectionCreated has drop, store {
     collection_address: address,
-    fa_address: address,
+    collection_name: String,
+    collection_description: String,
+    collection_uri: String,
+    collection_creator: address,
+    supply: u64,
   }
 
   #[event]
-  struct TokenMinted has drop, store {
+  struct NftMinted has drop, store {
     collection_address: address,
-    token_address: address,
+    nft_address: address,
   }
 
   #[event]
@@ -302,7 +306,11 @@ module aptos_404::tokenized_nfts {
     });
     event::emit<CollectionCreated>(CollectionCreated {
       collection_address: object::address_from_constructor_ref(&collection_constructor_ref),
-      fa_address: object::address_from_constructor_ref(&metadata_object_constructor_ref),
+      collection_name: name,
+      collection_description: description,
+      collection_uri: uri,
+      collection_creator: signer::address_of(creator),
+      supply,
     });
 
     (collection_constructor_ref)
@@ -336,9 +344,9 @@ module aptos_404::tokenized_nfts {
     let metadata_address = get_fa_metadata_address(collection_address);
     primary_fungible_store::mint(&borrow_global<MetadataManager>(metadata_address).mint_ref, @aptos_404, ONE_FA_VALUE);
 
-    event::emit<TokenMinted>(TokenMinted {
+    event::emit<NftMinted>(NftMinted {
       collection_address,
-      token_address: signer::address_of(&nft_signer)
+      nft_address: signer::address_of(&nft_signer)
     });
     signer::address_of(&nft_signer)
   }
