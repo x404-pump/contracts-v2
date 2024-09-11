@@ -5,10 +5,10 @@ authors = []
 upgrade_policy = "compatible"
 
 [addresses]
-aptos_404 = "_"
+aptos_404 = "0xa1ca98a0ada029504cf0d59310050c545d115f589818d5addc6a66c60aa7c1f"
 
 [dev-addresses]
-aptos_404 = "c3084eb39877ded56fdecaee9c469c15332392fb3cec7c21a937d7d355698aa0"
+aptos_404 = "0xa1ca98a0ada029504cf0d59310050c545d115f589818d5addc6a66c60aa7c1f"
 
 [dependencies.AptosFramework]
 git = "https://github.com/aptos-labs/aptos-core.git"
