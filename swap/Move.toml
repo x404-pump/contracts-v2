@@ -5,7 +5,7 @@ version = "0.0.0"
 [addresses]
 aptos_framework = "0x1"
 deployer = "6b5dd370b613d3aa9761aefd65d590136d87cc3d0369b0f14f9cabc83d5b9fb1"
-swap = "f4b17b9bc76d3f222e7fce3d983332af396b3c0724e9d52acc2c804f594f4609"
+swap = "382a7483d472e344ab00a4c62a7db58d878e860fdb31b639806ff4871178ab62"
 
 [dependencies.AptosFramework]
 git = "https://github.com/aptos-labs/aptos-core.git"

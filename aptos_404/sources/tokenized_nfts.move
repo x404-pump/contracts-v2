@@ -347,6 +347,7 @@ module aptos_404::tokenized_nfts {
     create_collection_internal(creator, description, supply, name, option::none(), uri, fa_symbol, fa_icon)
   }
 
+  #[lint::allow_unsafe_randomness]
   public fun create_collection_and_mint(creator: &signer, description: String, supply: u64, name: String, uri: String, fa_symbol: String, fa_icon: String, descriptions: vector<String>, names: vector<String>, uris: vector<String>) : (ConstructorRef, FungibleAsset) acquires TokenManager, FAManagedRef, MetadataManager, HoldersInfo, CommitedWithdrawInfo, DispatchFunctionInfo, CollectionInfo {
     let collection_constructor_ref = create_collection_internal(creator, description, supply, name, option::none(), uri, fa_symbol, fa_icon);
     let collection_address = object::address_from_constructor_ref(&collection_constructor_ref);
