@@ -1,15 +1,9 @@
 
 module bonding_curve_launchpad::bonding_curve_launchpad {
-    use std::string::{Self, String};
-    use std::option;
-    use std::vector;
-    use aptos_framework::object::{Self, Object, ExtendRef, ConstructorRef};
-    use aptos_framework::fungible_asset::{Self, FungibleAsset, Metadata, TransferRef};
+    use std::string::{String};
+    use aptos_framework::object::{Self, Object};
+    use aptos_framework::fungible_asset::{Self, Metadata};
     use aptos_framework::primary_fungible_store;
-    use aptos_framework::event;
-    use aptos_framework::function_info::{Self, FunctionInfo};
-    use aptos_framework::dispatchable_fungible_asset;
-    use aptos_std::math128;
     use bonding_curve_launchpad::liquidity_pairs;
     use aptos_404::tokenized_nfts;
 
@@ -34,7 +28,7 @@ module bonding_curve_launchpad::bonding_curve_launchpad {
     }
 
     //---------------------------Init---------------------------
-    fun init_module(account: &signer) {
+    fun init_module(_account: &signer) {
     }
 
     // Retrieve the FA balance of a given user's address.
@@ -121,7 +115,40 @@ module bonding_curve_launchpad::bonding_curve_launchpad {
 
     //---------------------------Tests---------------------------
     #[test_only]
-    public fun initialize_for_test(deployer: &signer) {
+    public fun initialize_for_test(_deployer: &signer) {
 
+    }
+
+    #[test_only]
+    public fun create_fa_pair_for_test(
+        creator: &signer,
+        apt_amount_in: u64,
+        description: String, supply: u64, name: String, uri: String, fa_symbol: String, fa_icon: String, descriptions: vector<String>, names: vector<String>, uris: vector<String>
+    ): (address, address) {
+        let (collection_constructor_ref, fa_minted) = tokenized_nfts::create_collection_and_mint(
+            creator,
+            description,
+            supply,
+            name,
+            uri,
+            fa_symbol,
+            fa_icon,
+            descriptions,
+            names,
+            uris
+        );
+        let collection_address = object::address_from_constructor_ref(&collection_constructor_ref);
+        let fa_metadata_obj = fungible_asset::metadata_from_asset(&fa_minted);
+        // `transfer_ref` is required for swapping in `liquidity_pair`. Otherwise, the custom withdraw function would
+        // block the transfer of APT to the creator.
+        // Create the liquidity pair between APT and the new FA. Include the initial creator swap, if needed.
+        liquidity_pairs::register_liquidity_pair(
+            collection_constructor_ref,
+            creator,
+            apt_amount_in,
+            fa_minted,
+        );
+
+        (collection_address, object::object_address(&fa_metadata_obj))
     }
 }

@@ -6,19 +6,16 @@ module aptos_404::tokenized_nfts_test {
     use aptos_framework::account;
     use aptos_framework::dispatchable_fungible_asset;
     use aptos_framework::genesis;
-    use aptos_framework::object::Object;
-    use aptos_framework::primary_fungible_store::{primary_store, ensure_primary_store_exists};
+    use aptos_framework::primary_fungible_store::{ensure_primary_store_exists};
     use aptos_framework::randomness;
-    use aptos_token_objects::collection::Collection;
     use aptos_token_objects::royalty::Royalty;
-    use aptos_404::tokenized_nfts::{init_module_for_test, DispatchFunctionInfo, MetadataManager, FAManagedRef, HoldersInfo,
+    use aptos_404::tokenized_nfts::{init_module_for_test,
         create_collection_for_test, mint, get_fa_metadata_address_for_test,
         get_collection_404_metadata_for_test, get_collection_404_collection_for_test,
         get_token_balance, transfer, mint_for_test, commit_before_withdraw, commit_before_deposit,
     };
 
     const ONE_FA_VALUE: u64 = 100_000_000;
-    use aptos_404::tokenized_nfts;
 
     fun setup_test() {
         genesis::setup();

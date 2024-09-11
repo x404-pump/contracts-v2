@@ -1,6 +1,4 @@
 module bonding_curve_launchpad::liquidity_pairs {
-    use std::string::{Self, String};
-    use std::vector;
     use aptos_std::signer;
     use aptos_std::math128;
     use aptos_framework::coin;
@@ -10,14 +8,18 @@ module bonding_curve_launchpad::liquidity_pairs {
     use aptos_framework::object::{Self, Object, ExtendRef, ConstructorRef};
     use aptos_framework::event;
     use aptos_framework::fungible_asset;
-    use aptos_framework::fungible_asset::{Metadata, TransferRef, FungibleAsset, FungibleStore};
+    use aptos_framework::fungible_asset::{Metadata, FungibleAsset, FungibleStore};
     use aptos_framework::primary_fungible_store;
     use aptos_404::tokenized_nfts;
-    use aptos_token_objects::collection::{Self, Collection};
     use swap::router;
     use swap::liquidity_pool;
     use swap::coin_wrapper;
     friend bonding_curve_launchpad::bonding_curve_launchpad;
+
+    #[test_only]
+    friend bonding_curve_launchpad::test_liquidity_pairs;
+    #[test_only]
+    friend bonding_curve_launchpad::test_bonding_curve_pairs;
 
     const FA_DECIMALS: u8 = 8;
     const INITIAL_VIRTUAL_APT_LIQUIDITY: u128 = 50_000_000_000;
@@ -76,7 +78,7 @@ module bonding_curve_launchpad::liquidity_pairs {
     }
 
     //---------------------------Init---------------------------
-    fun init_module(account: &signer) {
+    fun init_module(_account: &signer) {
     }
 
 
@@ -156,10 +158,11 @@ module bonding_curve_launchpad::liquidity_pairs {
         let liquidity_pair_extend_ref = object::generate_extend_ref(&liquidity_pair_object);
         // Store all minted FA inside the liquidity_pair struct, within a Fungible Store. This object is responsible
         // for *only* it's own reserves.
-        let fa_store_obj_constructor = object::create_object(@bonding_curve_launchpad);
+        let fa_store_obj_constructor = object::create_object(signer::address_of(&liquidity_pair_signer));
         let fa_store = fungible_asset::create_store(&fa_store_obj_constructor, fa_object_metadata);
         let amount = fungible_asset::amount(&fa_initial_liquidity);
-        fungible_asset::deposit(fa_store, fa_initial_liquidity);
+        tokenized_nfts::commit_before_deposit(collection_address);
+        dispatchable_fungible_asset::deposit(fa_store, fa_initial_liquidity);
 
         // Define and store the state of the liquidity pair as:
         // Reserves, FA store, global frozen status (`is_frozen`), and enabled trading (`is_enabled`).
@@ -275,7 +278,8 @@ module bonding_curve_launchpad::liquidity_pairs {
         aptos_account::transfer(swapper_account, liquidity_pair_address, apt_given);
         tokenized_nfts::commit_before_withdraw(collection_address);
         tokenized_nfts::commit_before_deposit(collection_address);
-        dispatchable_fungible_asset::transfer(swapper_account, liquidity_pair.fa_store, to_swapper_store, fa_gained);
+        let liquidity_pair_signer = &object::generate_signer_for_extending(&liquidity_pair.extend_ref);
+        dispatchable_fungible_asset::transfer(liquidity_pair_signer, liquidity_pair.fa_store, to_swapper_store, fa_gained);
         // Record state changes to the liquidity pair's reserves, and emit changes as events.
         let former_fa_reserves = liquidity_pair.fa_reserves;
         let former_apt_reserves = liquidity_pair.apt_reserves;
@@ -390,6 +394,6 @@ module bonding_curve_launchpad::liquidity_pairs {
 
     //---------------------------Tests---------------------------
     #[test_only]
-    public fun initialize_for_test(deployer: &signer) {
+    public fun initialize_for_test(_deployer: &signer) {
     }
 }
