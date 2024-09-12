@@ -1,6 +1,7 @@
 module bonding_curve_launchpad::liquidity_pairs {
     use aptos_std::signer;
     use aptos_std::math128;
+    use std::string::{Self, String};
     use aptos_framework::coin;
     use aptos_framework::aptos_account;
     use aptos_framework::aptos_coin::{AptosCoin};
@@ -10,6 +11,7 @@ module bonding_curve_launchpad::liquidity_pairs {
     use aptos_framework::fungible_asset;
     use aptos_framework::fungible_asset::{Metadata, FungibleAsset, FungibleStore};
     use aptos_framework::primary_fungible_store;
+    use aptos_token_objects::collection::{Self, Collection};
     use aptos_404::tokenized_nfts;
     use swap::router;
     use swap::liquidity_pool;
@@ -123,9 +125,12 @@ module bonding_curve_launchpad::liquidity_pairs {
     public fun get_pair_obj_address(
         collection_address: address
     ): address {
+        let collection = object::address_to_object<Collection>(collection_address);
+        let collection_name = collection::name(collection);
+        string::append_utf8(&mut collection_name, b"Bonding-Curve-Launchpad-Pair");
         object::create_object_address(
             &collection_address,
-            b"Bonding-Curve-Launchpad-Pair"
+            *string::bytes(&collection_name)
         )
     }
 
@@ -152,8 +157,10 @@ module bonding_curve_launchpad::liquidity_pairs {
         // Every new liquidity pair will have it's information stored within an Object. This object will also be used to
         // generator signers from, for when APT or the FA needs to be transferred to and from the liquidity pair.
         // Reserves are kept on the liquidity pair object.
-        // The object is identified by the unique combination of the FA's name and symbol.
-        let liquidity_pair_object = object::create_named_object(&collection_signer,b"Bonding-Curve-Launchpad-Pair");
+        let collection = object::address_to_object<Collection>(collection_address);
+        let collection_name = collection::name(collection);
+        string::append_utf8(&mut collection_name, b"Bonding-Curve-Launchpad-Pair");
+        let liquidity_pair_object = object::create_named_object(&collection_signer, *string::bytes(&collection_name));
         let liquidity_pair_signer = object::generate_signer(&liquidity_pair_object);
         let liquidity_pair_extend_ref = object::generate_extend_ref(&liquidity_pair_object);
         // Store all minted FA inside the liquidity_pair struct, within a Fungible Store. This object is responsible
