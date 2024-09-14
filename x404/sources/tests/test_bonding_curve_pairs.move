@@ -73,7 +73,8 @@ module bonding_curve_launchpad::test_bonding_curve_pairs {
             string::utf8(b"https://example.com/fa/a"),
             descriptions,
             names,
-            uris
+            uris,
+            300_000_000
         );
     }
 
@@ -113,7 +114,8 @@ module bonding_curve_launchpad::test_bonding_curve_pairs {
             string::utf8(b"https://example.com/fa/a"),
             descriptions,
             names,
-            uris
+            uris,
+            300_000_000
         );
 
         register_and_mint<APT>(&aptos, swapper, 250 * ONE_FA_VALUE);
@@ -121,9 +123,9 @@ module bonding_curve_launchpad::test_bonding_curve_pairs {
         liquidity_pairs::swap_apt_to_fa(collection_address, swapper, object::address_to_object(fa_metadata_address), 250 * ONE_FA_VALUE);
 
         let fa_balance = primary_fungible_store::balance<fungible_asset::Metadata>(signer::address_of(swapper), object::address_to_object(fa_metadata_address));
-        assert!(fa_balance == 1 * ONE_FA_VALUE, 1);
+        assert!(fa_balance == 3 * ONE_FA_VALUE, 1);
 
         let token_owned = tokenized_nfts::get_token_balance(object::address_to_object(collection_address), primary_store(signer::address_of(swapper), object::address_to_object<Metadata>(fa_metadata_address)));
-        assert!(token_owned == 1, 2);
+        assert!(token_owned == 3, 2);
     }
 }

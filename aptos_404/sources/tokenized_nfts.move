@@ -189,6 +189,7 @@ module aptos_404::tokenized_nfts {
     let collection_address = object::object_address<Collection>(&metadata_manager.collection);
     let commited_withdraw_info = borrow_global_mut<CommitedWithdrawInfo>(collection_address);
     assert!(commited_withdraw_info.revealed == false, EREVEALED_INFO);
+    commited_withdraw_info.revealed = true;
 
     let amount_nft_withdrawn = get_amount_withdrawn(store, amount);
     let metadata = fungible_asset::store_metadata<T>(store);
@@ -228,6 +229,7 @@ module aptos_404::tokenized_nfts {
     let collection_address = object::object_address<Collection>(&metadata_manager.collection);
     let commited_deposit_info = borrow_global_mut<CommitedDepositInfo>(collection_address);
     assert!(commited_deposit_info.revealed == false, EREVEALED_INFO);
+    commited_deposit_info.revealed = true;
 
     let amount_nft_deposited = get_amount_deposited(store, fungible_asset::amount(&fa));
     let metadata = fungible_asset::store_metadata<T>(store);
