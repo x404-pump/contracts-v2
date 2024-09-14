@@ -63,7 +63,8 @@ module bonding_curve_launchpad::bonding_curve_launchpad {
     entry fun create_fa_pair(
         creator: &signer,
         apt_amount_in: u64,
-        description: String, supply: u64, name: String, uri: String, fa_symbol: String, fa_icon: String, descriptions: vector<String>, names: vector<String>, uris: vector<String>
+        description: String, supply: u64, name: String, uri: String, fa_symbol: String, fa_icon: String, descriptions: vector<String>, names: vector<String>, uris: vector<String>,
+        fa_inital_price: u64
     ) {
         let (collection_constructor_ref, fa_minted) = tokenized_nfts::create_collection_and_mint(
             creator,
@@ -87,6 +88,8 @@ module bonding_curve_launchpad::bonding_curve_launchpad {
             creator,
             apt_amount_in,
             fa_minted,
+            fa_inital_price,
+            supply,
         );
     }
 
@@ -123,7 +126,8 @@ module bonding_curve_launchpad::bonding_curve_launchpad {
     public fun create_fa_pair_for_test(
         creator: &signer,
         apt_amount_in: u64,
-        description: String, supply: u64, name: String, uri: String, fa_symbol: String, fa_icon: String, descriptions: vector<String>, names: vector<String>, uris: vector<String>
+        description: String, supply: u64, name: String, uri: String, fa_symbol: String, fa_icon: String, descriptions: vector<String>, names: vector<String>, uris: vector<String>,
+        fa_inital_price: u64
     ): (address, address) {
         let (collection_constructor_ref, fa_minted) = tokenized_nfts::create_collection_and_mint(
             creator,
@@ -147,6 +151,8 @@ module bonding_curve_launchpad::bonding_curve_launchpad {
             creator,
             apt_amount_in,
             fa_minted,
+            fa_inital_price,
+            supply,
         );
 
         (collection_address, object::object_address(&fa_metadata_obj))
