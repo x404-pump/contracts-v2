@@ -92,8 +92,6 @@ module aptos_404::tokenized_nfts_test {
         let test_store = ensure_primary_store_exists(@aptos_404, metadata);
         let user_store = ensure_primary_store_exists(signer::address_of(user), metadata);
         assert!(get_token_balance(collection, test_store) == 1, 1);
-        std::debug::print(&string::utf8(b"token address"));
-        std::debug::print(&token_address);
         transfer(test, signer::address_of(user), token_address);
 
         assert!(get_token_balance(collection, test_store) == 0, 1);
