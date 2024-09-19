@@ -177,7 +177,7 @@ module bonding_curve_launchpad::liquidity_pairs {
         let amount = (fungible_asset::amount(&fa_initial_liquidity) as u128) + INITIAL_VIRTUAL_FA_LIQUIDITY;
         tokenized_nfts::commit_before_deposit(collection_address);
         dispatchable_fungible_asset::deposit(fa_store, fa_initial_liquidity);
-        let apt_initial_reserves = ((fa_inital_price as u128) * (supply as u128));
+        let apt_initial_reserves = ((fa_inital_price as u128) * ((supply + 50) as u128));
         // Define and store the state of the liquidity pair as:
         // Reserves, FA store, global frozen status (`is_frozen`), and enabled trading (`is_enabled`).
         // Initial APT reserves are virtual liquidity, for less extreme initial swaps (avoiding early adopter's
@@ -322,7 +322,7 @@ module bonding_curve_launchpad::liquidity_pairs {
         );
         // Check for graduation requirements. The APT reserves must be above the pre-defined
         // threshold to allow for graduation.
-        if (liquidity_pair.is_enabled && fa_updated_reserves * 2 <= ((liquidity_pair.total_nft_raised * ONE_FA_VALUE) as u128)) {
+        if (liquidity_pair.is_enabled && (fa_updated_reserves - INITIAL_VIRTUAL_FA_LIQUIDITY) * 2 <= ((liquidity_pair.total_nft_raised * ONE_FA_VALUE) as u128)) {
             graduate(liquidity_pair, fa_object_metadata, apt_updated_reserves, fa_updated_reserves);
         }
     }
