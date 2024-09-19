@@ -1,22 +1,11 @@
 #[test_only]
 module bonding_curve_launchpad::test_liquidity_pairs {
     use std::signer;
-    use std::string;
-    use std::string::String;
-    use std::vector;
     use aptos_framework::aptos_coin::AptosCoin as APT;
     use aptos_framework::account;
-    use aptos_framework::coin;
-    use aptos_framework::fungible_asset;
-    use aptos_framework::fungible_asset::Metadata;
     use aptos_framework::genesis;
     use aptos_framework::managed_coin;
-    use aptos_framework::object;
-    use aptos_framework::primary_fungible_store;
-    use aptos_framework::primary_fungible_store::primary_store;
     use aptos_framework::randomness;
-    use swap::router::swap;
-    use bonding_curve_launchpad::bonding_curve_launchpad;
     use aptos_404::tokenized_nfts;
     use bonding_curve_launchpad::liquidity_pairs;
 

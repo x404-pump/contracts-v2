@@ -13,8 +13,8 @@ module bonding_curve_launchpad::test_bonding_curve_pairs {
     use aptos_framework::primary_fungible_store;
     use aptos_framework::primary_fungible_store::primary_store;
     use aptos_framework::randomness;
-    use bonding_curve_launchpad::liquidity_pairs;
     use aptos_404::tokenized_nfts;
+    use bonding_curve_launchpad::liquidity_pairs;
     use bonding_curve_launchpad::bonding_curve_launchpad;
 
     const ONE_FA_VALUE: u64 = 100_000_000;
@@ -26,6 +26,9 @@ module bonding_curve_launchpad::test_bonding_curve_pairs {
 
     fun setup_test() {
         genesis::setup();
+        swap::package_manager::initialize_for_test(&account::create_account_for_test(@deployer));
+        swap::coin_wrapper::initialize();
+        swap::liquidity_pool::initialize();
         let aptos = account::create_account_for_test(@0x1);
         randomness::initialize_for_testing(&aptos);
         tokenized_nfts::init_module_for_test(&account::create_account_for_test(@aptos_404));
@@ -39,93 +42,95 @@ module bonding_curve_launchpad::test_bonding_curve_pairs {
         );
     }
     
-    // #[test(creator = @0xabcd)]
-    // fun test_create_fa_pair(creator: &signer) {
-    //     setup_test();
-    //     account::create_account_for_test(signer::address_of(creator));
+    #[test(creator = @0xabcd)]
+    fun test_create_fa_pair(creator: &signer) {
+        setup_test();
+        account::create_account_for_test(signer::address_of(creator));
 
-    //     let aptos = account::create_account_for_test(@0x1);
-    //     register_and_mint<APT>(&aptos, creator, 10 * 100_000_000);
+        let aptos = account::create_account_for_test(@0x1);
+        register_and_mint<APT>(&aptos, creator, 10 * 100_000_000);
 
-    //     let descriptions = vector::empty<String>();
-    //     vector::push_back(&mut descriptions, string::utf8(b"1st token"));
-    //     vector::push_back(&mut descriptions, string::utf8(b"2nd token"));
-    //     vector::push_back(&mut descriptions, string::utf8(b"3rd token"));
+        let descriptions = vector::empty<String>();
+        vector::push_back(&mut descriptions, string::utf8(b"1st token"));
+        vector::push_back(&mut descriptions, string::utf8(b"2nd token"));
+        vector::push_back(&mut descriptions, string::utf8(b"3rd token"));
 
-    //     let names = vector::empty<String>();
-    //     vector::push_back(&mut names, string::utf8(b"token 1"));
-    //     vector::push_back(&mut names, string::utf8(b"token 2"));
-    //     vector::push_back(&mut names, string::utf8(b"token 3"));
+        let names = vector::empty<String>();
+        vector::push_back(&mut names, string::utf8(b"token 1"));
+        vector::push_back(&mut names, string::utf8(b"token 2"));
+        vector::push_back(&mut names, string::utf8(b"token 3"));
 
-    //     let uris = vector::empty<String>();
-    //     vector::push_back(&mut uris, string::utf8(b"https://example.com/collection/a/token1"));
-    //     vector::push_back(&mut uris, string::utf8(b"https://example.com/collection/a/token2"));
-    //     vector::push_back(&mut uris, string::utf8(b"https://example.com/collection/a/token3"));
+        let uris = vector::empty<String>();
+        vector::push_back(&mut uris, string::utf8(b"https://example.com/collection/a/token1"));
+        vector::push_back(&mut uris, string::utf8(b"https://example.com/collection/a/token2"));
+        vector::push_back(&mut uris, string::utf8(b"https://example.com/collection/a/token3"));
 
-    //     let (_collection_address, _fa_metadata_address) = bonding_curve_launchpad::create_fa_pair_for_test(
-    //         creator,
-    //         5 * ONE_FA_VALUE,
-    //         string::utf8(b"a Collection"),
-    //         3,
-    //         string::utf8(b"Collection A"),
-    //         string::utf8(b"https://example.com/collection/a"),
-    //         string::utf8(b"COA"),
-    //         string::utf8(b"https://example.com/fa/a"),
-    //         descriptions,
-    //         names,
-    //         uris,
-    //         300_000_000
-    //     );
-    // }
+        let (_collection_address, _fa_metadata_address) = bonding_curve_launchpad::create_fa_pair_for_test(
+            creator,
+            5 * ONE_FA_VALUE,
+            string::utf8(b"a Collection"),
+            3,
+            string::utf8(b"Collection A"),
+            string::utf8(b"https://example.com/collection/a"),
+            string::utf8(b"COA"),
+            string::utf8(b"https://example.com/fa/a"),
+            descriptions,
+            names,
+            uris,
+            300_000_000
+        );
+    }
 
-    // #[test(swapper = @0xabcd)]
-    // fun test_create_fa_pair_and_swap(swapper: &signer) {
-    //     let creator = &account::create_account_for_test(@0x1234);
-    //     let swapper = &account::create_account_for_test(signer::address_of(swapper));
-    //     setup_test();
+    #[test(swapper = @0xabcd)]
+    fun test_create_fa_pair_and_swap(swapper: &signer) {
+        let creator = &account::create_account_for_test(@0x1234);
+        let swapper = &account::create_account_for_test(signer::address_of(swapper));
+        setup_test();
 
-    //     let aptos = account::create_account_for_test(@0x1);
-    //     register_and_mint<APT>(&aptos, creator, 10 * 100_000_000);
+        let aptos = account::create_account_for_test(@0x1);
+        register_and_mint<APT>(&aptos, creator, 10 * 100_000_000);
 
-    //     let descriptions = vector::empty<String>();
-    //     vector::push_back(&mut descriptions, string::utf8(b"1st token"));
-    //     vector::push_back(&mut descriptions, string::utf8(b"2nd token"));
-    //     vector::push_back(&mut descriptions, string::utf8(b"3rd token"));
+        let descriptions = vector::empty<String>();
+        vector::push_back(&mut descriptions, string::utf8(b"1st token"));
+        vector::push_back(&mut descriptions, string::utf8(b"2nd token"));
+        vector::push_back(&mut descriptions, string::utf8(b"3rd token"));
 
-    //     let names = vector::empty<String>();
-    //     vector::push_back(&mut names, string::utf8(b"token 1"));
-    //     vector::push_back(&mut names, string::utf8(b"token 2"));
-    //     vector::push_back(&mut names, string::utf8(b"token 3"));
+        let names = vector::empty<String>();
+        vector::push_back(&mut names, string::utf8(b"token 1"));
+        vector::push_back(&mut names, string::utf8(b"token 2"));
+        vector::push_back(&mut names, string::utf8(b"token 3"));
 
-    //     let uris = vector::empty<String>();
-    //     vector::push_back(&mut uris, string::utf8(b"https://example.com/collection/a/token1"));
-    //     vector::push_back(&mut uris, string::utf8(b"https://example.com/collection/a/token2"));
-    //     vector::push_back(&mut uris, string::utf8(b"https://example.com/collection/a/token3"));
+        let uris = vector::empty<String>();
+        vector::push_back(&mut uris, string::utf8(b"https://example.com/collection/a/token1"));
+        vector::push_back(&mut uris, string::utf8(b"https://example.com/collection/a/token2"));
+        vector::push_back(&mut uris, string::utf8(b"https://example.com/collection/a/token3"));
 
-    //     // There's 50_000_000_000 fake APT and 300_000_000 fa in pool
-    //     let (collection_address, fa_metadata_address) = bonding_curve_launchpad::create_fa_pair_for_test(
-    //         creator,
-    //         0,
-    //         string::utf8(b"a Collection"),
-    //         3,
-    //         string::utf8(b"Collection A"),
-    //         string::utf8(b"https://example.com/collection/a"),
-    //         string::utf8(b"COA"),
-    //         string::utf8(b"https://example.com/fa/a"),
-    //         descriptions,
-    //         names,
-    //         uris,
-    //         300_000_000
-    //     );
+        // There's 159_00_000_000 fake APT and 53_00_000_000 fa in pool
+        let (collection_address, fa_metadata_address) = bonding_curve_launchpad::create_fa_pair_for_test(
+            creator,
+            0,
+            string::utf8(b"a Collection"),
+            3,
+            string::utf8(b"Collection A"),
+            string::utf8(b"https://example.com/collection/a"),
+            string::utf8(b"COA"),
+            string::utf8(b"https://example.com/fa/a"),
+            descriptions,
+            names,
+            uris,
+            300_000_000
+        );
 
-    //     register_and_mint<APT>(&aptos, swapper, 250 * ONE_FA_VALUE);
+        let mint_and_swap_amount = 4 * ONE_FA_VALUE;
 
-    //     liquidity_pairs::swap_apt_to_fa(collection_address, swapper, object::address_to_object(fa_metadata_address), 250 * ONE_FA_VALUE);
+        register_and_mint<APT>(&aptos, swapper, mint_and_swap_amount);
 
-    //     let fa_balance = primary_fungible_store::balance<fungible_asset::Metadata>(signer::address_of(swapper), object::address_to_object(fa_metadata_address));
-    //     assert!(fa_balance == 3 * ONE_FA_VALUE, 1);
+        liquidity_pairs::swap_apt_to_fa(collection_address, swapper, object::address_to_object(fa_metadata_address), mint_and_swap_amount);
 
-    //     let token_owned = tokenized_nfts::get_token_balance(object::address_to_object(collection_address), primary_store(signer::address_of(swapper), object::address_to_object<Metadata>(fa_metadata_address)));
-    //     assert!(token_owned == 3, 2);
-    // }
+        let fa_balance = primary_fungible_store::balance<fungible_asset::Metadata>(signer::address_of(swapper), object::address_to_object(fa_metadata_address));
+        assert!(fa_balance == 130_061_349, 1);
+
+        let token_owned = tokenized_nfts::get_token_balance(object::address_to_object(collection_address), primary_store(signer::address_of(swapper), object::address_to_object<Metadata>(fa_metadata_address)));
+        assert!(token_owned == 1, 2);
+    }
 }

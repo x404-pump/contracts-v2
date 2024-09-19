@@ -5,7 +5,7 @@ authors = []
 upgrade_policy = "compatible"
 
 [addresses]
-aptos_404 = "_"
+aptos_404 = "0x372118596d234f83783f4327cda84b8b9275117300c8702631c48d1a0d88f8f7"
 
 [dev-addresses]
 aptos_404 = "0xabc"

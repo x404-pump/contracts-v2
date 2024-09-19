@@ -15,6 +15,8 @@ module swap::router {
     use swap::coin_wrapper;
     use swap::liquidity_pool::{Self, LiquidityPool};
 
+    use aptos_404::tokenized_nfts;
+
     /// Output is less than the desired minimum amount.
     const EINSUFFICIENT_OUTPUT_AMOUNT: u64 = 1;
     /// The liquidity pool is misconfigured and has 0 amount of one asset but non-zero amount of the other.
@@ -215,11 +217,16 @@ module swap::router {
 
     /// Add liquidity to a pool. The user specifies the desired amount of each token to add and this will add the
     /// optimal amounts. If no optimal amounts can be found, this will fail.
-    public entry fun add_liquidity_entry(
+    #[randomness]
+    entry fun add_liquidity_entry(
         lp: &signer,
         token_1: Object<Metadata>,
         token_2: Object<Metadata>,
         is_stable: bool,
+        is_fungible_asset_1_aptos_404: bool,
+        collection_address_1: address,
+        is_fungible_asset_2_aptos_404: bool,
+        collection_address_2: address,
         amount_1_desired: u64,
         amount_2_desired: u64,
         amount_1_min: u64,
@@ -234,25 +241,65 @@ module swap::router {
             amount_1_min,
             amount_2_min,
         );
+        if (is_fungible_asset_1_aptos_404) tokenized_nfts::commit_before_withdraw(collection_address_1);
+        if (is_fungible_asset_2_aptos_404) tokenized_nfts::commit_before_withdraw(collection_address_2);
         let optimal_1 = primary_fungible_store::withdraw(lp, token_1, optimal_amount_1);
         let optimal_2 = primary_fungible_store::withdraw(lp, token_2, optimal_amount_2);
-        add_liquidity(lp, optimal_1, optimal_2, is_stable);
+        add_liquidity(lp, optimal_1, optimal_2, is_stable, is_fungible_asset_1_aptos_404, collection_address_1, is_fungible_asset_2_aptos_404, collection_address_2);
+    }
+    /// Add liquidity to a pool. The user specifies the desired amount of each token to add and this will add the
+    /// optimal amounts. If no optimal amounts can be found, this will fail.
+    #[lint::allow_unsafe_randomness]
+    public fun add_liquidity_public(
+        lp: &signer,
+        token_1: Object<Metadata>,
+        token_2: Object<Metadata>,
+        is_stable: bool,
+        is_fungible_asset_1_aptos_404: bool,
+        collection_address_1: address,
+        is_fungible_asset_2_aptos_404: bool,
+        collection_address_2: address,
+        amount_1_desired: u64,
+        amount_2_desired: u64,
+        amount_1_min: u64,
+        amount_2_min: u64,
+    ) {
+        let (optimal_amount_1, optimal_amount_2, _) = optimal_liquidity_amounts(
+            token_1,
+            token_2,
+            is_stable,
+            amount_1_desired,
+            amount_2_desired,
+            amount_1_min,
+            amount_2_min,
+        );
+        if (is_fungible_asset_1_aptos_404) tokenized_nfts::commit_before_withdraw(collection_address_1);
+        if (is_fungible_asset_2_aptos_404) tokenized_nfts::commit_before_withdraw(collection_address_2);
+        let optimal_1 = primary_fungible_store::withdraw(lp, token_1, optimal_amount_1);
+        let optimal_2 = primary_fungible_store::withdraw(lp, token_2, optimal_amount_2);
+        add_liquidity(lp, optimal_1, optimal_2, is_stable, is_fungible_asset_1_aptos_404, collection_address_1, is_fungible_asset_2_aptos_404, collection_address_2);
     }
 
     /// Add two tokens as liquidity to a pool. The user should have computed the amounts to add themselves as this would
     /// not optimize the amounts.
+    #[lint::allow_unsafe_randomness]
     public inline fun add_liquidity(
         lp: &signer,
         token_1: FungibleAsset,
         token_2: FungibleAsset,
         is_stable: bool,
+        is_fungible_asset_1_aptos_404: bool,
+        collection_address_1: address,
+        is_fungible_asset_2_aptos_404: bool,
+        collection_address_2: address,
     ) {
-        liquidity_pool::mint(lp, token_1, token_2, is_stable);
+        liquidity_pool::mint(lp, token_1, token_2, is_stable, is_fungible_asset_1_aptos_404, collection_address_1, is_fungible_asset_2_aptos_404, collection_address_2);
     }
 
     /// Add a coin and a token as liquidity to a pool. The user specifies the desired amount of each token to add and
     /// this will add the optimal amounts. If no optimal amounts can be found, this will fail.
-    public entry fun add_liquidity_coin_entry<CoinType>(
+    #[randomness]
+    entry fun add_liquidity_coin_entry<CoinType>(
         lp: &signer,
         token_2: Object<Metadata>,
         is_stable: bool,
@@ -273,23 +320,53 @@ module swap::router {
         );
         let optimal_1 = coin_wrapper::wrap(coin::withdraw<CoinType>(lp, optimal_amount_1));
         let optimal_2 = primary_fungible_store::withdraw(lp, token_2, optimal_amount_2);
-        add_liquidity(lp, optimal_1, optimal_2, is_stable);
+        add_liquidity(lp, optimal_1, optimal_2, is_stable, false, @0x0, false, @0x0);
+    }
+    /// Add a coin and a token as liquidity to a pool. The user specifies the desired amount of each token to add and
+    /// this will add the optimal amounts. If no optimal amounts can be found, this will fail.
+    #[lint::allow_unsafe_randomness]
+    public fun add_liquidity_coin_public<CoinType>(
+        lp: &signer,
+        token_2: Object<Metadata>,
+        is_stable: bool,
+        amount_1_desired: u64,
+        amount_2_desired: u64,
+        amount_1_min: u64,
+        amount_2_min: u64,
+    ) {
+        let token_1 = coin_wrapper::get_wrapper<CoinType>();
+        let (optimal_amount_1, optimal_amount_2, _) = optimal_liquidity_amounts(
+            token_1,
+            token_2,
+            is_stable,
+            amount_1_desired,
+            amount_2_desired,
+            amount_1_min,
+            amount_2_min,
+        );
+        let optimal_1 = coin_wrapper::wrap(coin::withdraw<CoinType>(lp, optimal_amount_1));
+        let optimal_2 = primary_fungible_store::withdraw(lp, token_2, optimal_amount_2);
+        add_liquidity(lp, optimal_1, optimal_2, is_stable, false, @0x0, false, @0x0);
     }
 
     /// Add a coin and a token as liquidity to a pool. The user should have computed the amounts to add themselves as
     /// this would not optimize the amounts.
+    #[lint::allow_unsafe_randomness]
     public fun add_liquidity_coin<CoinType>(
         lp: &signer,
         token_1: Coin<CoinType>,
         token_2: FungibleAsset,
         is_stable: bool,
+        is_aptos_404: bool,
+        collection_address: address,
     ) {
-        add_liquidity(lp, coin_wrapper::wrap(token_1), token_2, is_stable);
+        add_liquidity(lp, coin_wrapper::wrap(token_1), token_2, is_stable, false, @0x0, is_aptos_404, collection_address);
     }
 
     /// Add two coins as liquidity to a pool. The user specifies the desired amount of each token to add and
     /// this will add the optimal amounts. If no optimal amounts can be found, this will fail.
-    public entry fun add_liquidity_both_coin_entry<CoinType1, CoinType2>(
+    #[randomness]
+    entry fun add_liquidity_both_coin_entry<CoinType1, CoinType2>(
         lp: &signer,
         is_stable: bool,
         amount_1_desired: u64,
@@ -310,18 +387,46 @@ module swap::router {
         );
         let optimal_1 = coin_wrapper::wrap(coin::withdraw<CoinType1>(lp, optimal_amount_1));
         let optimal_2 = coin_wrapper::wrap(coin::withdraw<CoinType2>(lp, optimal_amount_2));
-        add_liquidity(lp, optimal_1, optimal_2, is_stable);
+        add_liquidity(lp, optimal_1, optimal_2, is_stable, false, @0x0, false, @0x0);
+    }
+
+    /// Add two coins as liquidity to a pool. The user specifies the desired amount of each token to add and
+    /// this will add the optimal amounts. If no optimal amounts can be found, this will fail.
+    #[lint::allow_unsafe_randomness]
+    public fun add_liquidity_both_coin_public<CoinType1, CoinType2>(
+        lp: &signer,
+        is_stable: bool,
+        amount_1_desired: u64,
+        amount_2_desired: u64,
+        amount_1_min: u64,
+        amount_2_min: u64,
+    ) {
+        let token_1 = coin_wrapper::get_wrapper<CoinType1>();
+        let token_2 = coin_wrapper::get_wrapper<CoinType2>();
+        let (optimal_amount_1, optimal_amount_2, _) = optimal_liquidity_amounts(
+            token_1,
+            token_2,
+            is_stable,
+            amount_1_desired,
+            amount_2_desired,
+            amount_1_min,
+            amount_2_min,
+        );
+        let optimal_1 = coin_wrapper::wrap(coin::withdraw<CoinType1>(lp, optimal_amount_1));
+        let optimal_2 = coin_wrapper::wrap(coin::withdraw<CoinType2>(lp, optimal_amount_2));
+        add_liquidity(lp, optimal_1, optimal_2, is_stable, false, @0x0, false, @0x0);
     }
 
     /// Add two coins as liquidity to a pool. The user should have computed the amounts to add themselves as this would
     /// not optimize the amounts.
+    #[lint::allow_unsafe_randomness]
     public fun add_liquidity_both_coins<CoinType1, CoinType2>(
         lp: &signer,
         token_1: Coin<CoinType1>,
         token_2: Coin<CoinType2>,
         is_stable: bool,
     ) {
-        add_liquidity(lp, coin_wrapper::wrap(token_1), coin_wrapper::wrap(token_2), is_stable);
+        add_liquidity(lp, coin_wrapper::wrap(token_1), coin_wrapper::wrap(token_2), is_stable, false, @0x0, false, @0x0);
     }
 
     /// Remove an amount of liquidity from a pool. The user can specify the min amounts of each token they expect to

@@ -54,7 +54,7 @@ module swap::package_manager {
     #[test_only]
     public fun initialize_for_test(deployer: &signer) {
         account::create_account_for_test(std::signer::address_of(deployer));
-        resource_account::create_resource_account(deployer, b"0", x""); // swap account
+        resource_account::create_resource_account(deployer, b"swap", x""); // swap account
         aptos_framework::timestamp::set_time_has_started_for_testing(&account::create_signer_for_test(@0x1));
 
         init_module(&account::create_signer_for_test(@swap));
