@@ -494,40 +494,12 @@ module aptos_404::tokenized_nfts {
 
   #[randomness]
   entry fun entry_commit_before_withdraw(collection_address: address) acquires CollectionInfo, CommitedWithdrawInfo {
-    if (exists<CommitedWithdrawInfo>(collection_address)) {
-      let commited_withdraw_info = borrow_global_mut<CommitedWithdrawInfo>(collection_address);
-      if (commited_withdraw_info.revealed == true) {
-        get_collection_permuation(&mut commited_withdraw_info.permutation, collection_address);
-        commited_withdraw_info.revealed = false;
-      }
-    } else {
-      let collection_signer = get_collection_signer(collection_address);
-      let permutation = smart_vector::new<u64>();
-      get_collection_permuation(&mut permutation, collection_address);
-      move_to(&collection_signer, CommitedWithdrawInfo {
-        permutation,
-        revealed: false,
-      });
-    }
+    commit_before_withdraw(collection_address);
   }
 
   #[randomness]
   entry fun entry_commit_before_deposit(collection_address: address) acquires CollectionInfo, CommitedDepositInfo {
-    if (exists<CommitedDepositInfo>(collection_address)) {
-      let commited_deposit_info = borrow_global_mut<CommitedDepositInfo>(collection_address);
-      if (commited_deposit_info.revealed == true) {
-        get_collection_permuation(&mut commited_deposit_info.permutation, collection_address);
-        commited_deposit_info.revealed = false;
-      }
-    } else {
-      let collection_signer = get_collection_signer(collection_address);
-      let permutation = smart_vector::new<u64>();
-      get_collection_permuation(&mut permutation, collection_address);
-      move_to(&collection_signer, CommitedDepositInfo {
-        permutation,
-        revealed: false,
-      });
-    }
+    commit_before_deposit(collection_address);
   }
 
   #[lint::allow_unsafe_randomness]

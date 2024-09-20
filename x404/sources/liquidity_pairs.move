@@ -337,6 +337,45 @@ module bonding_curve_launchpad::liquidity_pairs {
         }
     }
 
+    #[view]
+    public fun swap_fa_to_apt_preview(
+        collection_address: address,
+        amount_in: u64
+    ): (u64, u64, u128, u128) acquires LiquidityPair {
+        // Verify the liquidity pair exists and is enabled for trading.
+        assert_liquidity_pair_exists(collection_address);
+        let liquidity_pair = borrow_global<LiquidityPair>(get_pair_obj_address(collection_address));
+        assert!(liquidity_pair.is_enabled, ELIQUIDITY_PAIR_DISABLED);
+        // Determine the amount received of APT, when given swapper-supplied amount_in of FA.
+        get_amount_out(
+            liquidity_pair.fa_reserves,
+            liquidity_pair.apt_reserves,
+            true,
+            amount_in,
+            liquidity_pair.apt_initial_reserves,
+            liquidity_pair.fa_threshold
+        )
+    }
+
+    #[view]
+    public fun swap_apt_to_fa_preview(
+        collection_address: address,
+        amount_in: u64
+    ): (u64, u64, u128, u128) acquires LiquidityPair {
+        // Verify the liquidity pair exists and is enabled for trading.
+        assert_liquidity_pair_exists(collection_address);
+        let liquidity_pair = borrow_global<LiquidityPair>(get_pair_obj_address(collection_address));
+        assert!(liquidity_pair.is_enabled, ELIQUIDITY_PAIR_DISABLED);
+        // Determine the amount received of FA, when given swapper-supplied amount_in of APT.
+        get_amount_out(
+            liquidity_pair.fa_reserves,
+            liquidity_pair.apt_reserves,
+            false,
+            amount_in,
+            liquidity_pair.apt_initial_reserves,
+            liquidity_pair.fa_threshold
+        )
+    }
     /// Moves the reserves of a liquidity pair on the `liquidity_pair` module to a newly created liquidity pair
     /// on an external DEX (`swap`). The resulting liquidity provider tokens are thrown away.
     /// Both of the FA's original liquidity pair and frozen status are disabled.

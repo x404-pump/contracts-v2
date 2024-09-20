@@ -15,8 +15,6 @@ module swap::router {
     use swap::coin_wrapper;
     use swap::liquidity_pool::{Self, LiquidityPool};
 
-    use std::debug;
-
     use aptos_404::tokenized_nfts;
 
     /// Output is less than the desired minimum amount.
@@ -67,7 +65,23 @@ module swap::router {
 
     /// Swap an amount of fungible assets for another fungible asset. User can specifies the minimum amount they
     /// expect to receive. If the actual amount received is less than the minimum amount, the transaction will fail.
-    public entry fun swap_entry(
+    #[randomness]
+    entry fun swap_entry(
+        user: &signer,
+        amount_in: u64,
+        amount_out_min: u64,
+        from_token: Object<Metadata>,
+        to_token: Object<Metadata>,
+        is_stable: bool,
+        recipient: address,
+    ) {
+        swap_public(user, amount_in, amount_out_min, from_token, to_token, is_stable, recipient);
+    }
+
+    /// Swap an amount of fungible assets for another fungible asset. User can specifies the minimum amount they
+    /// expect to receive. If the actual amount received is less than the minimum amount, the transaction will fail.
+    #[lint::allow_unsafe_randomness]
+    public fun swap_public(
         user: &signer,
         amount_in: u64,
         amount_out_min: u64,
@@ -82,6 +96,7 @@ module swap::router {
     }
 
     /// Similar to swap_entry but returns the fungible asset received for composability with other modules.
+    #[lint::allow_unsafe_randomness]
     public fun swap(
         in: FungibleAsset,
         amount_out_min: u64,
@@ -96,7 +111,21 @@ module swap::router {
     }
 
     /// Swap an amount of coins for fungible assets. User can specifies the minimum amount they expect to receive.
-    public entry fun swap_coin_for_asset_entry<FromCoin>(
+    #[randomness]
+    entry fun swap_coin_for_asset_entry<FromCoin>(
+        user: &signer,
+        amount_in: u64,
+        amount_out_min: u64,
+        to_token: Object<Metadata>,
+        is_stable: bool,
+        recipient: address,
+    ) {
+        swap_coin_for_asset_public<FromCoin>(user, amount_in, amount_out_min, to_token, is_stable, recipient);
+    }
+
+    /// Swap an amount of coins for fungible assets. User can specifies the minimum amount they expect to receive.
+    #[lint::allow_unsafe_randomness]
+    public fun swap_coin_for_asset_public<FromCoin>(
         user: &signer,
         amount_in: u64,
         amount_out_min: u64,
@@ -114,6 +143,7 @@ module swap::router {
 
     /// Similar to swap_coin_for_asset_entry but returns the fungible asset received for composability with other
     /// modules.
+    #[lint::allow_unsafe_randomness]
     public fun swap_coin_for_asset<FromCoin>(
         in: Coin<FromCoin>,
         amount_out_min: u64,
@@ -124,7 +154,21 @@ module swap::router {
     }
 
     /// Swap an amount of fungible assets for coins. User can specifies the minimum amount they expect to receive.
-    public entry fun swap_asset_for_coin_entry<ToCoin>(
+    #[randomness]
+    entry fun swap_asset_for_coin_entry<ToCoin>(
+        user: &signer,
+        amount_in: u64,
+        amount_out_min: u64,
+        from_token: Object<Metadata>,
+        is_stable: bool,
+        recipient: address,
+    ) {
+        swap_asset_for_coin_public<ToCoin>(user, amount_in, amount_out_min, from_token, is_stable, recipient, );
+    }
+
+    /// Swap an amount of fungible assets for coins. User can specifies the minimum amount they expect to receive.
+    #[lint::allow_unsafe_randomness]
+    public fun swap_asset_for_coin_public<ToCoin>(
         user: &signer,
         amount_in: u64,
         amount_out_min: u64,
@@ -138,6 +182,7 @@ module swap::router {
     }
 
     /// Similar to swap_asset_for_coin_entry but returns the coin received for composability with other modules.
+    #[lint::allow_unsafe_randomness]
     public fun swap_asset_for_coin<ToCoin>(
         in: FungibleAsset,
         amount_out_min: u64,
@@ -149,7 +194,20 @@ module swap::router {
     }
 
     /// Swap an amount of coins for another coin. User can specifies the minimum amount they expect to receive.
-    public entry fun swap_coin_for_coin_entry<FromCoin, ToCoin>(
+    #[randomness]
+    entry fun swap_coin_for_coin_entry<FromCoin, ToCoin>(
+        user: &signer,
+        amount_in: u64,
+        amount_out_min: u64,
+        is_stable: bool,
+        recipient: address,
+    ) {
+        swap_coin_for_coin_public<FromCoin, ToCoin>(user, amount_in, amount_out_min, is_stable, recipient);
+    }
+
+    /// Swap an amount of coins for another coin. User can specifies the minimum amount they expect to receive.
+    #[lint::allow_unsafe_randomness]
+    public fun swap_coin_for_coin_public<FromCoin, ToCoin>(
         user: &signer,
         amount_in: u64,
         amount_out_min: u64,
@@ -162,6 +220,7 @@ module swap::router {
     }
 
     /// Similar to swap_coin_for_coin_entry but returns the coin received for composability with other modules.
+    #[lint::allow_unsafe_randomness]
     public fun swap_coin_for_coin<FromCoin, ToCoin>(
         in: Coin<FromCoin>,
         amount_out_min: u64,
@@ -228,30 +287,14 @@ module swap::router {
         token_1: Object<Metadata>,
         token_2: Object<Metadata>,
         is_stable: bool,
-        is_fungible_asset_1_aptos_404: bool,
-        collection_address_1: address,
-        is_fungible_asset_2_aptos_404: bool,
-        collection_address_2: address,
         amount_1_desired: u64,
         amount_2_desired: u64,
         amount_1_min: u64,
         amount_2_min: u64,
     ) {
-        let (optimal_amount_1, optimal_amount_2, _) = optimal_liquidity_amounts(
-            token_1,
-            token_2,
-            is_stable,
-            amount_1_desired,
-            amount_2_desired,
-            amount_1_min,
-            amount_2_min,
-        );
-        if (is_fungible_asset_1_aptos_404) tokenized_nfts::commit_before_withdraw(collection_address_1);
-        if (is_fungible_asset_2_aptos_404) tokenized_nfts::commit_before_withdraw(collection_address_2);
-        let optimal_1 = primary_fungible_store::withdraw(lp, token_1, optimal_amount_1);
-        let optimal_2 = primary_fungible_store::withdraw(lp, token_2, optimal_amount_2);
-        add_liquidity(lp, optimal_1, optimal_2, is_stable);
+        add_liquidity_public(lp, token_1, token_2, is_stable, amount_1_desired, amount_2_desired, amount_1_min, amount_2_min);
     }
+
     /// Add liquidity to a pool. The user specifies the desired amount of each token to add and this will add the
     /// optimal amounts. If no optimal amounts can be found, this will fail.
     #[lint::allow_unsafe_randomness]
@@ -305,20 +348,9 @@ module swap::router {
         amount_1_min: u64,
         amount_2_min: u64,
     ) {
-        let token_1 = coin_wrapper::get_wrapper<CoinType>();
-        let (optimal_amount_1, optimal_amount_2, _) = optimal_liquidity_amounts(
-            token_1,
-            token_2,
-            is_stable,
-            amount_1_desired,
-            amount_2_desired,
-            amount_1_min,
-            amount_2_min,
-        );
-        let optimal_1 = coin_wrapper::wrap(coin::withdraw<CoinType>(lp, optimal_amount_1));
-        let optimal_2 = primary_fungible_store::withdraw(lp, token_2, optimal_amount_2);
-        add_liquidity(lp, optimal_1, optimal_2, is_stable);
+        add_liquidity_coin_public<CoinType>(lp, token_2, is_stable, amount_1_desired, amount_2_desired, amount_1_min, amount_2_min);
     }
+
     /// Add a coin and a token as liquidity to a pool. The user specifies the desired amount of each token to add and
     /// this will add the optimal amounts. If no optimal amounts can be found, this will fail.
     #[lint::allow_unsafe_randomness]
@@ -369,20 +401,7 @@ module swap::router {
         amount_1_min: u64,
         amount_2_min: u64,
     ) {
-        let token_1 = coin_wrapper::get_wrapper<CoinType1>();
-        let token_2 = coin_wrapper::get_wrapper<CoinType2>();
-        let (optimal_amount_1, optimal_amount_2, _) = optimal_liquidity_amounts(
-            token_1,
-            token_2,
-            is_stable,
-            amount_1_desired,
-            amount_2_desired,
-            amount_1_min,
-            amount_2_min,
-        );
-        let optimal_1 = coin_wrapper::wrap(coin::withdraw<CoinType1>(lp, optimal_amount_1));
-        let optimal_2 = coin_wrapper::wrap(coin::withdraw<CoinType2>(lp, optimal_amount_2));
-        add_liquidity(lp, optimal_1, optimal_2, is_stable);
+        add_liquidity_both_coin_public<CoinType1, CoinType2>(lp, is_stable, amount_1_desired, amount_2_desired, amount_1_min, amount_2_min);
     }
 
     /// Add two coins as liquidity to a pool. The user specifies the desired amount of each token to add and
