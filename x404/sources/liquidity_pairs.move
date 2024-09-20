@@ -2,6 +2,7 @@ module bonding_curve_launchpad::liquidity_pairs {
     use aptos_std::signer;
     use aptos_std::math128;
     use std::string::{Self};
+    use std::debug;
     use aptos_framework::coin;
     use aptos_framework::aptos_account;
     use aptos_framework::aptos_coin::{AptosCoin};
@@ -25,7 +26,6 @@ module bonding_curve_launchpad::liquidity_pairs {
 
     const FA_DECIMALS: u8 = 8;
     const ONE_FA_VALUE: u64 = 100_000_000;
-    const INITIAL_VIRTUAL_FA_LIQUIDITY: u128 = 50_00_000_000;
 
     /// Swapper does not own the FA being swapped.
     const EFA_PRIMARY_STORE_DOES_NOT_EXIST: u64 = 12;
@@ -37,6 +37,7 @@ module bonding_curve_launchpad::liquidity_pairs {
     const ELIQUIDITY_PAIR_DISABLED: u64 = 102;
     /// Swap results in negligible amount out. Requires increasing amount in.
     const ELIQUIDITY_PAIR_SWAP_AMOUNTOUT_INSIGNIFICANT: u64 = 111;
+    const ESUPPLY_TOO_SMALL: u64 = 103;
 
     //---------------------------Events---------------------------
     #[event]
@@ -78,7 +79,7 @@ module bonding_curve_launchpad::liquidity_pairs {
         apt_reserves: u128,
         fa_store: Object<FungibleStore>,
         apt_initial_reserves: u128,
-        total_nft_raised: u64,
+        fa_threshold: u64,
     }
 
     //---------------------------Init---------------------------
@@ -96,6 +97,7 @@ module bonding_curve_launchpad::liquidity_pairs {
         swap_to_apt: bool,
         amount_in: u64,
         initial_virtual_apt_liquidity: u128,
+        min_remaining_fa: u64
     ): (u64, u64, u128, u128) {
         if (swap_to_apt) {
             let divisor = fa_reserves + (amount_in as u128);
@@ -108,7 +110,7 @@ module bonding_curve_launchpad::liquidity_pairs {
         } else {
             let divisor = apt_reserves + (amount_in as u128);
             let fa_gained = (math128::mul_div(fa_reserves, (amount_in as u128), divisor) as u64);
-            fa_gained = ((math128::min((fa_gained as u128), fa_reserves - INITIAL_VIRTUAL_FA_LIQUIDITY)) as u64);
+            fa_gained = ((math128::min((fa_gained as u128), fa_reserves - (min_remaining_fa as u128))) as u64);
             let fa_updated_reserves = fa_reserves - (fa_gained as u128);
             let apt_updated_reserves = apt_reserves + (amount_in as u128);
             assert!(fa_gained > 0, ELIQUIDITY_PAIR_SWAP_AMOUNTOUT_INSIGNIFICANT);
@@ -158,6 +160,7 @@ module bonding_curve_launchpad::liquidity_pairs {
         fa_inital_price: u64,
         supply: u64
     ) acquires LiquidityPair {
+        assert!(supply >= 50, ESUPPLY_TOO_SMALL);
         let collection_address = object::address_from_constructor_ref(&collection_constructor_ref);
         let collection_signer = object::generate_signer(&collection_constructor_ref);
         let fa_object_metadata = fungible_asset::metadata_from_asset(&fa_initial_liquidity);
@@ -174,14 +177,11 @@ module bonding_curve_launchpad::liquidity_pairs {
         // for *only* it's own reserves.
         let fa_store_obj_constructor = object::create_object(signer::address_of(&liquidity_pair_signer));
         let fa_store = fungible_asset::create_store(&fa_store_obj_constructor, fa_object_metadata);
-        let amount = (fungible_asset::amount(&fa_initial_liquidity) as u128) + INITIAL_VIRTUAL_FA_LIQUIDITY;
+        let amount = (fungible_asset::amount(&fa_initial_liquidity) as u128);
+        let fa_threshold = fungible_asset::amount(&fa_initial_liquidity) / 2;
         tokenized_nfts::commit_before_deposit(collection_address);
         dispatchable_fungible_asset::deposit(fa_store, fa_initial_liquidity);
-        let apt_initial_reserves = ((fa_inital_price as u128) * ((supply + 50) as u128));
-        std::debug::print(&amount);
-        std::debug::print(&fa_inital_price);
-        std::debug::print(&supply);
-        std::debug::print(&apt_initial_reserves);
+        let apt_initial_reserves = ((fa_inital_price as u128) * ((supply) as u128));
         // Define and store the state of the liquidity pair as:
         // Reserves, FA store, global frozen status (`is_frozen`), and enabled trading (`is_enabled`).
         // Initial APT reserves are virtual liquidity, for less extreme initial swaps (avoiding early adopter's
@@ -196,7 +196,7 @@ module bonding_curve_launchpad::liquidity_pairs {
                 apt_reserves: apt_initial_reserves,
                 fa_store,
                 apt_initial_reserves,
-                total_nft_raised: supply
+                fa_threshold,
             }
         );
         event::emit(
@@ -230,6 +230,7 @@ module bonding_curve_launchpad::liquidity_pairs {
             true,
             amount_in,
             liquidity_pair.apt_initial_reserves,
+            liquidity_pair.fa_threshold
         );
         // Verify the swapper holds the FA.
         let swapper_address = signer::address_of(swapper_account);
@@ -289,6 +290,7 @@ module bonding_curve_launchpad::liquidity_pairs {
             false,
             amount_in,
             liquidity_pair.apt_initial_reserves,
+            liquidity_pair.fa_threshold
         );
         // Perform the swap.
         // Swapper sends APT to the liquidity pair object. The liquidity pair object sends FA to the swapper, in return.
@@ -326,7 +328,7 @@ module bonding_curve_launchpad::liquidity_pairs {
         );
         // Check for graduation requirements. The APT reserves must be above the pre-defined
         // threshold to allow for graduation.
-        if (liquidity_pair.is_enabled && (fa_updated_reserves - INITIAL_VIRTUAL_FA_LIQUIDITY) * 2 <= ((liquidity_pair.total_nft_raised * ONE_FA_VALUE) as u128)) {
+        if (liquidity_pair.is_enabled && fa_updated_reserves == (liquidity_pair.fa_threshold as u128)) {
             graduate(liquidity_pair, collection_address, fa_object_metadata, apt_updated_reserves, fa_updated_reserves);
         }
     }
@@ -357,7 +359,7 @@ module bonding_curve_launchpad::liquidity_pairs {
             true,
             collection_address,
             ((apt_updated_reserves - liquidity_pair.apt_initial_reserves) as u64),
-            ((fa_updated_reserves - INITIAL_VIRTUAL_FA_LIQUIDITY) as u64),
+            ((fa_updated_reserves) as u64),
             0,
             0
         );

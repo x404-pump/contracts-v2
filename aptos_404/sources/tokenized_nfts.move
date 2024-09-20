@@ -3,6 +3,7 @@ module aptos_404::tokenized_nfts {
   use std::string::{Self, String};
   use std::option::{Self, Option};
   use std::vector::{Self};
+  use std::debug;
   use aptos_std::smart_vector::{Self, SmartVector};
   use aptos_framework::object::{Self, Object, ConstructorRef, TransferRef, ExtendRef};
   use aptos_framework::primary_fungible_store::{Self};
@@ -179,6 +180,13 @@ module aptos_404::tokenized_nfts {
     let name = collection::name<Collection>(collection_object);
     let metadata_seed = get_fa_metadata_seed(name);
     object::create_object_address(&creator, *string::bytes(&metadata_seed))
+  }
+
+  #[view]
+  public fun get_collection_address(fa_metadata_address: address): address acquires MetadataManager {
+    let metadata_object = object::address_to_object<Metadata>(fa_metadata_address);
+    let collection_object = borrow_global<MetadataManager>(fa_metadata_address).collection;
+    object::object_address(&collection_object)
   }
 
   fun get_amount_withdrawn<T: key>(store: Object<T>, amount: u64): u64 {
