@@ -45,7 +45,6 @@ module bonding_curve_launchpad::liquidity_pairs {
         fa_object_metadata: Object<Metadata>,
         initial_fa_reserves: u128,
         initial_apt_reserves: u128,
-        initial_fa_price: u64
     }
 
     #[event]
@@ -81,6 +80,7 @@ module bonding_curve_launchpad::liquidity_pairs {
         fa_store: Object<FungibleStore>,
         apt_initial_reserves: u128,
         fa_threshold: u64,
+        fa_initial_price: u64,
     }
 
     //---------------------------Init---------------------------
@@ -104,17 +104,27 @@ module bonding_curve_launchpad::liquidity_pairs {
             let divisor = fa_reserves + (amount_in as u128);
             let apt_gained = (math128::mul_div(apt_reserves, (amount_in as u128), divisor) as u64);
             apt_gained = ((math128::min((apt_gained as u128), apt_reserves - initial_virtual_apt_liquidity)) as u64);
-            let fa_given = math128::mul_div((apt_gained as u128), fa_reserves, apt_reserves) as u64;
-            let fa_updated_reserves = fa_reserves + (fa_given as u128);
             let apt_updated_reserves = apt_reserves - (apt_gained as u128);
+            let fa_given;
+            if (apt_updated_reserves == initial_virtual_apt_liquidity) {
+                fa_given = math128::mul_div((apt_gained as u128), fa_reserves, apt_reserves) as u64;
+            } else {
+                fa_given = amount_in;
+            };
+            let fa_updated_reserves = fa_reserves + (fa_given as u128);
             assert!(apt_gained > 0, ELIQUIDITY_PAIR_SWAP_AMOUNTOUT_INSIGNIFICANT);
             (fa_given, apt_gained, fa_updated_reserves, apt_updated_reserves)
         } else {
             let divisor = apt_reserves + (amount_in as u128);
             let fa_gained = (math128::mul_div(fa_reserves, (amount_in as u128), divisor) as u64);
             fa_gained = ((math128::min((fa_gained as u128), fa_reserves - (min_remaining_fa as u128))) as u64);
-            let apt_given = math128::mul_div((fa_gained as u128), apt_reserves, fa_reserves) as u64;
             let fa_updated_reserves = fa_reserves - (fa_gained as u128);
+            let apt_given = math128::mul_div((fa_gained as u128), apt_reserves, fa_reserves) as u64;
+            if (fa_updated_reserves == (min_remaining_fa as u128)) {
+                apt_given = math128::mul_div((fa_gained as u128), apt_reserves, fa_reserves) as u64;
+            } else {
+                apt_given = amount_in;
+            };
             let apt_updated_reserves = apt_reserves + (apt_given as u128);
             assert!(fa_gained > 0, ELIQUIDITY_PAIR_SWAP_AMOUNTOUT_INSIGNIFICANT);
             (fa_gained, apt_given, fa_updated_reserves, apt_updated_reserves)
@@ -160,7 +170,7 @@ module bonding_curve_launchpad::liquidity_pairs {
         swapper: &signer,
         apt_amount_in: u64,
         fa_initial_liquidity: FungibleAsset,
-        fa_inital_price: u64,
+        fa_initial_price: u64,
         supply: u64
     ) acquires LiquidityPair {
         assert!(supply >= 50, ESUPPLY_TOO_SMALL);
@@ -184,7 +194,7 @@ module bonding_curve_launchpad::liquidity_pairs {
         let fa_threshold = fungible_asset::amount(&fa_initial_liquidity) / 2;
         tokenized_nfts::commit_before_deposit(collection_address);
         dispatchable_fungible_asset::deposit(fa_store, fa_initial_liquidity);
-        let apt_initial_reserves = ((fa_inital_price as u128) * ((supply) as u128));
+        let apt_initial_reserves = ((fa_initial_price as u128) * ((supply) as u128));
         // Define and store the state of the liquidity pair as:
         // Reserves, FA store, global frozen status (`is_frozen`), and enabled trading (`is_enabled`).
         // Initial APT reserves are virtual liquidity, for less extreme initial swaps (avoiding early adopter's
@@ -200,6 +210,7 @@ module bonding_curve_launchpad::liquidity_pairs {
                 fa_store,
                 apt_initial_reserves,
                 fa_threshold,
+                fa_initial_price,
             }
         );
         event::emit(
@@ -207,7 +218,6 @@ module bonding_curve_launchpad::liquidity_pairs {
                 fa_object_metadata,
                 initial_fa_reserves: amount,
                 initial_apt_reserves: apt_initial_reserves,
-                initial_fa_price: fa_inital_price
             }
         );
         // Optional initial swap given to the creator of the FA.
@@ -376,6 +386,16 @@ module bonding_curve_launchpad::liquidity_pairs {
             liquidity_pair.fa_threshold
         )
     }
+
+    #[view]
+    public fun get_fa_initial_price(
+        collection_address: address
+    ): u64 acquires LiquidityPair {
+        assert_liquidity_pair_exists(collection_address);
+        let liquidity_pair = borrow_global<LiquidityPair>(get_pair_obj_address(collection_address));
+        liquidity_pair.fa_initial_price
+    }
+
     /// Moves the reserves of a liquidity pair on the `liquidity_pair` module to a newly created liquidity pair
     /// on an external DEX (`swap`). The resulting liquidity provider tokens are thrown away.
     /// Both of the FA's original liquidity pair and frozen status are disabled.
