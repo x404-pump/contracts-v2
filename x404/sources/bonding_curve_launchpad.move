@@ -115,6 +115,25 @@ module bonding_curve_launchpad::bonding_curve_launchpad {
             liquidity_pairs::swap_apt_to_fa(collection_address, account, fa_metadata_obj, amount_in);
         };
     }
+    /// Swap from FA to APT, or vice versa, through `liquidity_pair`.
+    #[view]
+    public fun preview_amount_out(
+        collection_address: address,
+        swap_to_apt: bool,
+        amount_in: u64
+    ): (u64, u64, u128, u128) {
+        // Verify the `amount_in` is valid and that the FA exists.
+        assert!(amount_in > 0, ELIQUIDITY_PAIR_SWAP_AMOUNTIN_INVALID);
+        // FA Object<Metadata> required for primary_fungible_store interactions.
+        // `transfer_ref` is used to bypass the `is_frozen` status of the FA. Without this, the defined dispatchable
+        // withdraw function would prevent the ability to transfer the participant's FA onto the liquidity pair.
+        // Initiate the swap on the associated liquidity pair.
+        if (swap_to_apt) {
+            liquidity_pairs::swap_fa_to_apt_preview(collection_address, amount_in)
+        } else {
+            liquidity_pairs::swap_apt_to_fa_preview(collection_address, amount_in)
+        }
+    }
 
     //---------------------------Tests---------------------------
     #[test_only]
