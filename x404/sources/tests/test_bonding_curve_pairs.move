@@ -3,7 +3,6 @@ module bonding_curve_launchpad::test_bonding_curve_pairs {
     use std::signer;
     use std::string::{Self, String};
     use std::vector;
-    use std::debug;
     use aptos_std::string_utils;
     use aptos_framework::account;
     use aptos_framework::aptos_coin::AptosCoin as APT;
@@ -18,7 +17,6 @@ module bonding_curve_launchpad::test_bonding_curve_pairs {
     use aptos_404::tokenized_nfts;
     use bonding_curve_launchpad::liquidity_pairs;
     use bonding_curve_launchpad::bonding_curve_launchpad;
-    use swap::router;
 
     const ONE_FA_VALUE: u64 = 100_000_000;
 
@@ -64,7 +62,7 @@ module bonding_curve_launchpad::test_bonding_curve_pairs {
             vector::push_back(&mut uris, string::utf8(b"https://example.com/collection/a/token"));
         };
 
-        let (collection_address, fa_metadata_address) = bonding_curve_launchpad::create_fa_pair_for_test(
+        let (_collection_address, fa_metadata_address) = bonding_curve_launchpad::create_fa_pair_for_test(
             creator,
             258 * 100_000_000,
             string::utf8(b"a Collection"),
@@ -96,19 +94,20 @@ module bonding_curve_launchpad::test_bonding_curve_pairs {
         let names = vector::empty<String>();
         let uris = vector::empty<String>();
 
-        for (i in 0..1000) {
+        let token_supply = 1000;
+
+        for (i in 0..token_supply) {
             let token_name = string_utils::to_string_with_integer_types<u64>(&i);
             vector::push_back(&mut descriptions, token_name);
             vector::push_back(&mut names, token_name);
             vector::push_back(&mut uris, string::utf8(b"https://example.com/collection/a/token"));
         };
 
-        // There's 159_00_000_000 fake APT and 53_00_000_000 fa in pool
         let (collection_address, fa_metadata_address) = bonding_curve_launchpad::create_fa_pair_for_test(
             creator,
             0,
             string::utf8(b"a Collection"),
-            1000,
+            token_supply,
             string::utf8(b"Collection A"),
             string::utf8(b"https://example.com/collection/a"),
             string::utf8(b"COA"),
@@ -119,10 +118,10 @@ module bonding_curve_launchpad::test_bonding_curve_pairs {
             100_000_000
         );
 
-        let mint_and_swap_amount = 10000 * ONE_FA_VALUE;
+        let mint_amount = 10000 * ONE_FA_VALUE;
         let swap_amount = 2000 * ONE_FA_VALUE;
 
-        register_and_mint<APT>(&aptos, swapper, mint_and_swap_amount);
+        register_and_mint<APT>(&aptos, swapper, mint_amount);
 
         liquidity_pairs::swap_apt_to_fa(collection_address, swapper, object::address_to_object(fa_metadata_address), swap_amount);
 
@@ -131,6 +130,9 @@ module bonding_curve_launchpad::test_bonding_curve_pairs {
 
         let token_owned = tokenized_nfts::get_token_balance(object::address_to_object(collection_address), primary_store(signer::address_of(swapper), object::address_to_object<Metadata>(fa_metadata_address)));
         assert!(token_owned == 500, 2);
+
+        // let token_owned = tokenized_nfts::get_token_balance(object::address_to_object(collection_address), primary_store(signer::address_of(swapper), object::address_to_object<Metadata>(fa_metadata_address)));
+        // assert!(token_owned == 1, 2);
 
         // router::swap_coin_for_asset_entry<APT>(
         //     swapper,

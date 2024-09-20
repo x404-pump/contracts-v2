@@ -18,7 +18,7 @@ module swap::liquidity_pool {
         Self, FungibleAsset, FungibleStore, Metadata,
         BurnRef, MintRef, TransferRef,
     };
-    use aptos_framework::object::{Self, ConstructorRef, Object};
+    use aptos_framework::object::{Self, ConstructorRef, Object, object_address};
     use aptos_framework::primary_fungible_store;
     use aptos_std::comparator;
     use aptos_std::math128;
@@ -392,15 +392,11 @@ module swap::liquidity_pool {
         fungible_asset_1: FungibleAsset,
         fungible_asset_2: FungibleAsset,
         is_stable: bool,
-        is_fungible_asset_1_aptos_404: bool,
-        collection_address_1: address,
-        is_fungible_asset_2_aptos_404: bool,
-        collection_address_2: address,
     ) acquires FeesAccounting, LiquidityPool {
         let token_1 = fungible_asset::metadata_from_asset(&fungible_asset_1);
         let token_2 = fungible_asset::metadata_from_asset(&fungible_asset_2);
         if (!is_sorted(token_1, token_2)) {
-            return mint(lp, fungible_asset_2, fungible_asset_1, is_stable, is_fungible_asset_2_aptos_404, collection_address_2, is_fungible_asset_1_aptos_404, collection_address_1)
+            return mint(lp, fungible_asset_2, fungible_asset_1, is_stable)
         };
         // The LP store needs to exist before we can mint LP tokens.
         let pool = liquidity_pool(token_1, token_2, is_stable);
@@ -432,9 +428,9 @@ module swap::liquidity_pool {
         assert!(liquidity_token_amount > 0, EINSUFFICIENT_LIQUIDITY_MINTED);
 
         // Deposit the received liquidity into the pool.
-        if (is_fungible_asset_1_aptos_404) tokenized_nfts::commit_before_deposit(collection_address_1);
+        if (tokenized_nfts::is_fa_metadata_aptos_404(object::object_address(&token_1))) tokenized_nfts::commit_before_deposit(tokenized_nfts::get_collection_address(object_address(&token_1)));
+        if (tokenized_nfts::is_fa_metadata_aptos_404(object::object_address(&token_2))) tokenized_nfts::commit_before_deposit(tokenized_nfts::get_collection_address(object_address(&token_2)));
         dispatchable_fungible_asset::deposit(store_1, fungible_asset_1);
-        if (is_fungible_asset_2_aptos_404) tokenized_nfts::commit_before_deposit(collection_address_2);
         dispatchable_fungible_asset::deposit(store_2, fungible_asset_2);
 
         // We need to update the amount of rewards claimable by this LP token store if they already have a previous

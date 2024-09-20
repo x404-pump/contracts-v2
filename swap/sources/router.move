@@ -8,7 +8,7 @@ module swap::router {
     use aptos_framework::aptos_account;
     use aptos_framework::coin::{Self, Coin};
     use aptos_framework::fungible_asset::{Self, FungibleAsset, Metadata};
-    use aptos_framework::object::{Self, Object};
+    use aptos_framework::object::{Self, Object, object_address};
     use aptos_framework::primary_fungible_store;
     use aptos_std::math128;
 
@@ -245,7 +245,7 @@ module swap::router {
         if (is_fungible_asset_2_aptos_404) tokenized_nfts::commit_before_withdraw(collection_address_2);
         let optimal_1 = primary_fungible_store::withdraw(lp, token_1, optimal_amount_1);
         let optimal_2 = primary_fungible_store::withdraw(lp, token_2, optimal_amount_2);
-        add_liquidity(lp, optimal_1, optimal_2, is_stable, is_fungible_asset_1_aptos_404, collection_address_1, is_fungible_asset_2_aptos_404, collection_address_2);
+        add_liquidity(lp, optimal_1, optimal_2, is_stable);
     }
     /// Add liquidity to a pool. The user specifies the desired amount of each token to add and this will add the
     /// optimal amounts. If no optimal amounts can be found, this will fail.
@@ -255,10 +255,6 @@ module swap::router {
         token_1: Object<Metadata>,
         token_2: Object<Metadata>,
         is_stable: bool,
-        is_fungible_asset_1_aptos_404: bool,
-        collection_address_1: address,
-        is_fungible_asset_2_aptos_404: bool,
-        collection_address_2: address,
         amount_1_desired: u64,
         amount_2_desired: u64,
         amount_1_min: u64,
@@ -273,11 +269,11 @@ module swap::router {
             amount_1_min,
             amount_2_min,
         );
-        if (is_fungible_asset_1_aptos_404) tokenized_nfts::commit_before_withdraw(collection_address_1);
-        if (is_fungible_asset_2_aptos_404) tokenized_nfts::commit_before_withdraw(collection_address_2);
+        if (tokenized_nfts::is_fa_metadata_aptos_404(object::object_address(&token_1))) tokenized_nfts::commit_before_withdraw(tokenized_nfts::get_collection_address(object_address(&token_1)));
+        if (tokenized_nfts::is_fa_metadata_aptos_404(object::object_address(&token_2))) tokenized_nfts::commit_before_withdraw(tokenized_nfts::get_collection_address(object_address(&token_2)));
         let optimal_1 = primary_fungible_store::withdraw(lp, token_1, optimal_amount_1);
         let optimal_2 = primary_fungible_store::withdraw(lp, token_2, optimal_amount_2);
-        add_liquidity(lp, optimal_1, optimal_2, is_stable, is_fungible_asset_1_aptos_404, collection_address_1, is_fungible_asset_2_aptos_404, collection_address_2);
+        add_liquidity(lp, optimal_1, optimal_2, is_stable);
     }
 
     /// Add two tokens as liquidity to a pool. The user should have computed the amounts to add themselves as this would
@@ -288,12 +284,8 @@ module swap::router {
         token_1: FungibleAsset,
         token_2: FungibleAsset,
         is_stable: bool,
-        is_fungible_asset_1_aptos_404: bool,
-        collection_address_1: address,
-        is_fungible_asset_2_aptos_404: bool,
-        collection_address_2: address,
     ) {
-        liquidity_pool::mint(lp, token_1, token_2, is_stable, is_fungible_asset_1_aptos_404, collection_address_1, is_fungible_asset_2_aptos_404, collection_address_2);
+        liquidity_pool::mint(lp, token_1, token_2, is_stable);
     }
 
     /// Add a coin and a token as liquidity to a pool. The user specifies the desired amount of each token to add and
@@ -320,7 +312,7 @@ module swap::router {
         );
         let optimal_1 = coin_wrapper::wrap(coin::withdraw<CoinType>(lp, optimal_amount_1));
         let optimal_2 = primary_fungible_store::withdraw(lp, token_2, optimal_amount_2);
-        add_liquidity(lp, optimal_1, optimal_2, is_stable, false, @0x0, false, @0x0);
+        add_liquidity(lp, optimal_1, optimal_2, is_stable);
     }
     /// Add a coin and a token as liquidity to a pool. The user specifies the desired amount of each token to add and
     /// this will add the optimal amounts. If no optimal amounts can be found, this will fail.
@@ -346,7 +338,7 @@ module swap::router {
         );
         let optimal_1 = coin_wrapper::wrap(coin::withdraw<CoinType>(lp, optimal_amount_1));
         let optimal_2 = primary_fungible_store::withdraw(lp, token_2, optimal_amount_2);
-        add_liquidity(lp, optimal_1, optimal_2, is_stable, false, @0x0, false, @0x0);
+        add_liquidity(lp, optimal_1, optimal_2, is_stable);
     }
 
     /// Add a coin and a token as liquidity to a pool. The user should have computed the amounts to add themselves as
@@ -357,10 +349,8 @@ module swap::router {
         token_1: Coin<CoinType>,
         token_2: FungibleAsset,
         is_stable: bool,
-        is_aptos_404: bool,
-        collection_address: address,
     ) {
-        add_liquidity(lp, coin_wrapper::wrap(token_1), token_2, is_stable, false, @0x0, is_aptos_404, collection_address);
+        add_liquidity(lp, coin_wrapper::wrap(token_1), token_2, is_stable);
     }
 
     /// Add two coins as liquidity to a pool. The user specifies the desired amount of each token to add and
@@ -387,7 +377,7 @@ module swap::router {
         );
         let optimal_1 = coin_wrapper::wrap(coin::withdraw<CoinType1>(lp, optimal_amount_1));
         let optimal_2 = coin_wrapper::wrap(coin::withdraw<CoinType2>(lp, optimal_amount_2));
-        add_liquidity(lp, optimal_1, optimal_2, is_stable, false, @0x0, false, @0x0);
+        add_liquidity(lp, optimal_1, optimal_2, is_stable);
     }
 
     /// Add two coins as liquidity to a pool. The user specifies the desired amount of each token to add and
@@ -414,7 +404,7 @@ module swap::router {
         );
         let optimal_1 = coin_wrapper::wrap(coin::withdraw<CoinType1>(lp, optimal_amount_1));
         let optimal_2 = coin_wrapper::wrap(coin::withdraw<CoinType2>(lp, optimal_amount_2));
-        add_liquidity(lp, optimal_1, optimal_2, is_stable, false, @0x0, false, @0x0);
+        add_liquidity(lp, optimal_1, optimal_2, is_stable);
     }
 
     /// Add two coins as liquidity to a pool. The user should have computed the amounts to add themselves as this would
@@ -426,7 +416,7 @@ module swap::router {
         token_2: Coin<CoinType2>,
         is_stable: bool,
     ) {
-        add_liquidity(lp, coin_wrapper::wrap(token_1), coin_wrapper::wrap(token_2), is_stable, false, @0x0, false, @0x0);
+        add_liquidity(lp, coin_wrapper::wrap(token_1), coin_wrapper::wrap(token_2), is_stable);
     }
 
     /// Remove an amount of liquidity from a pool. The user can specify the min amounts of each token they expect to

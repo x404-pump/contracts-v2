@@ -8,7 +8,6 @@ module bonding_curve_launchpad::test_liquidity_pairs {
     use aptos_framework::randomness;
     use aptos_404::tokenized_nfts;
     use bonding_curve_launchpad::liquidity_pairs;
-    use std::debug;
 
     const ONE_FA_VALUE: u64 = 100_000_000;
     const INITIAL_VIRTUAL_FA_LIQUIDITY: u128 = 50_00_000_000;
@@ -51,10 +50,10 @@ module bonding_curve_launchpad::test_liquidity_pairs {
     #[test(deployer = @bonding_curve_launchpad)]
     public fun test_get_amount_out(deployer: &signer) {
         liquidity_pairs::initialize_for_test(deployer);
-        let (fa_gained, amount_in, fa_updated_reserves, apt_updated_reserves) = liquidity_pairs::get_amount_out(25_000_000_000, 30_000_000_000, false, 300_000_000, 50_00_000_000, 50_00_000_000 + 10_000_000_000);
+        let (fa_gained, _amount_in, _fa_updated_reserves, _apt_updated_reserves) = liquidity_pairs::get_amount_out(25_000_000_000, 30_000_000_000, false, 300_000_000, 50_00_000_000, 50_00_000_000 + 10_000_000_000);
         assert!(fa_gained == 247524752, 1);
 
-        let (amount_in, apt_gained, fa_updated_reserves, apt_updated_reserves) = liquidity_pairs::get_amount_out(25_000_000_000, 30_000_000_000, true, 300_000_000, 50_00_000_000, 50_00_000_000 + 10_000_000_000);
+        let (_amount_in, apt_gained, _fa_updated_reserves, _apt_updated_reserves) = liquidity_pairs::get_amount_out(25_000_000_000, 30_000_000_000, true, 300_000_000, 50_00_000_000, 50_00_000_000 + 10_000_000_000);
         assert!(apt_gained == 355731225, 2);
     }
 }

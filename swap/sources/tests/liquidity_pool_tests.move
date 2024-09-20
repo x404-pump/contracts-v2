@@ -141,10 +141,6 @@ module swap::liquidity_pool_tests {
             fungible_asset::extract(tokens_1, amount_1),
             fungible_asset::extract(tokens_2, amount_2),
             is_stable,
-            false,
-            @0x0,
-            false,
-            @0x0
         );
     }
 

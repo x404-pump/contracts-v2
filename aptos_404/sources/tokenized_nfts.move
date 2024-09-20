@@ -3,9 +3,8 @@ module aptos_404::tokenized_nfts {
   use std::string::{Self, String};
   use std::option::{Self, Option};
   use std::vector::{Self};
-  use std::debug;
   use aptos_std::smart_vector::{Self, SmartVector};
-  use aptos_framework::object::{Self, Object, ConstructorRef, TransferRef, ExtendRef};
+  use aptos_framework::object::{Self, Object, ConstructorRef, TransferRef, ExtendRef, object_exists};
   use aptos_framework::primary_fungible_store::{Self};
   use aptos_framework::fungible_asset::{Self, FungibleAsset, Metadata, TransferRef as FungibleTransferRef, MintRef};
   use aptos_framework::event::{Self};
@@ -184,9 +183,13 @@ module aptos_404::tokenized_nfts {
 
   #[view]
   public fun get_collection_address(fa_metadata_address: address): address acquires MetadataManager {
-    let metadata_object = object::address_to_object<Metadata>(fa_metadata_address);
     let collection_object = borrow_global<MetadataManager>(fa_metadata_address).collection;
     object::object_address(&collection_object)
+  }
+
+  #[view]
+  public fun is_fa_metadata_aptos_404(fa_metadata_address: address): bool {
+    object_exists<MetadataManager>(fa_metadata_address)
   }
 
   fun get_amount_withdrawn<T: key>(store: Object<T>, amount: u64): u64 {
@@ -203,6 +206,8 @@ module aptos_404::tokenized_nfts {
     amount_nft_deposited
   }
 
+  /// A custom withdraw function, use 0x1::dispatchable_fungible_asset::withdraw to call this function.
+  /// Will (randomly) transfer 1 nft for each ONE_FA_VALUE of fa
   public fun withdraw<T: key>(
     store: Object<T>,
     amount: u64,
@@ -253,6 +258,8 @@ module aptos_404::tokenized_nfts {
     )
   }
 
+  /// A custom deposit function, use 0x1::dispatchable_fungible_asset::deposit to call this function.
+  /// Will (randomly) transfer 1 nft for each ONE_FA_VALUE of fa
   public fun deposit<T: key>(
     store: Object<T>,
     fa: FungibleAsset,
@@ -397,10 +404,12 @@ module aptos_404::tokenized_nfts {
     signer::address_of(&nft_signer)
   }
 
+  /// Creates a collection, and fungible asset associated with it.
   public fun create_collection(creator: &signer, description: String, supply: u64, name: String, uri: String, fa_symbol: String, fa_icon: String): ConstructorRef acquires DispatchFunctionInfo {
     create_collection_internal(creator, description, supply, name, option::none(), uri, fa_symbol, fa_icon)
   }
 
+  /// Creates a collection, fungible asset associated with it, and mint.
   #[lint::allow_unsafe_randomness]
   public fun create_collection_and_mint(creator: &signer, description: String, supply: u64, name: String, uri: String, fa_symbol: String, fa_icon: String, descriptions: vector<String>, names: vector<String>, uris: vector<String>) : (ConstructorRef, FungibleAsset) acquires TokenManager, FAManagedRef, MetadataManager, HoldersInfo, CommitedWithdrawInfo, DispatchFunctionInfo, CollectionInfo {
     let collection_constructor_ref = create_collection_internal(creator, description, supply, name, option::none(), uri, fa_symbol, fa_icon);
@@ -413,11 +422,13 @@ module aptos_404::tokenized_nfts {
     (collection_constructor_ref, fa)
   }
 
+  /// Mint a token from a collection.
   entry public fun mint(creator: &signer, collection_address: address, description: String, name: String, uri: String)
   acquires TokenManager, MetadataManager, HoldersInfo {
     mint_internal(creator, collection_address, description, name, uri);
   }
 
+  /// Batch mint token from a collection.
   entry public fun mint_batch_404s_in_collection(creator: &signer, collection_address: address, descriptions: vector<String>, names: vector<String>, uris: vector<String>)
   acquires TokenManager, MetadataManager, HoldersInfo {
     assert!(vector::length<String>(&descriptions) == vector::length<String>(&names) && vector::length<String>(&names) == vector::length<String>(&uris), EBATCH_LENGTH_MISMATCH);
@@ -426,6 +437,7 @@ module aptos_404::tokenized_nfts {
     };
   }
 
+  /// Transfers a token directly
   entry public fun transfer(from: &signer, to: address, token_address: address) acquires TokenManager, FAManagedRef, HoldersInfo {
     assert!(signer::address_of(from) != to, EINVALID_RECIPIENT);
     let token_object = object::address_to_object<TokenManager>(token_address);

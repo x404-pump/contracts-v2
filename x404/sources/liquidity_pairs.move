@@ -2,12 +2,11 @@ module bonding_curve_launchpad::liquidity_pairs {
     use aptos_std::signer;
     use aptos_std::math128;
     use std::string::{Self};
-    use std::debug;
     use aptos_framework::coin;
     use aptos_framework::aptos_account;
     use aptos_framework::aptos_coin::{AptosCoin};
     use aptos_framework::dispatchable_fungible_asset;
-    use aptos_framework::object::{Self, Object, ExtendRef, ConstructorRef};
+    use aptos_framework::object::{Self, Object, ExtendRef, ConstructorRef, object_address};
     use aptos_framework::event;
     use aptos_framework::fungible_asset;
     use aptos_framework::fungible_asset::{Metadata, FungibleAsset, FungibleStore};
@@ -329,7 +328,7 @@ module bonding_curve_launchpad::liquidity_pairs {
         // Check for graduation requirements. The APT reserves must be above the pre-defined
         // threshold to allow for graduation.
         if (liquidity_pair.is_enabled && fa_updated_reserves == (liquidity_pair.fa_threshold as u128)) {
-            graduate(liquidity_pair, collection_address, fa_object_metadata, apt_updated_reserves, fa_updated_reserves);
+            graduate(liquidity_pair, fa_object_metadata, apt_updated_reserves, fa_updated_reserves);
         }
     }
 
@@ -340,7 +339,6 @@ module bonding_curve_launchpad::liquidity_pairs {
     /// longer frozen for `transfer`.
     fun graduate(
         liquidity_pair: &mut LiquidityPair,
-        collection_address: address,
         fa_object_metadata: Object<Metadata>,
         apt_updated_reserves: u128,
         fa_updated_reserves: u128,
@@ -356,8 +354,6 @@ module bonding_curve_launchpad::liquidity_pairs {
             liquidity_pair.fa_store,
             fa_object_metadata,
             false,
-            true,
-            collection_address,
             ((apt_updated_reserves - liquidity_pair.apt_initial_reserves) as u64),
             ((fa_updated_reserves) as u64),
             0,
@@ -390,8 +386,6 @@ module bonding_curve_launchpad::liquidity_pairs {
         fa_store: Object<FungibleStore>,
         token_2: Object<Metadata>,
         is_stable: bool,
-        is_aptos_404: bool,
-        collection_address: address,
         amount_1_desired: u64,
         amount_2_desired: u64,
         amount_1_min: u64,
@@ -413,7 +407,7 @@ module bonding_curve_launchpad::liquidity_pairs {
         // visiting `bonding_curve_launchpad` to execute the custom withdraw logic. `transfer_ref` bypasses the need to
         // return to `bonding_curve_launchpad` by not executing the custom withdraw logic.
         let optimal_1 = coin::withdraw<CoinType>(lp, optimal_amount_1);
-        if (is_aptos_404) tokenized_nfts::commit_before_withdraw(collection_address);
+        if (tokenized_nfts::is_fa_metadata_aptos_404(object::object_address(&token_2))) tokenized_nfts::commit_before_withdraw(tokenized_nfts::get_collection_address(object_address(&token_2)));
         let optimal_2 = dispatchable_fungible_asset::withdraw(lp, fa_store, optimal_amount_2);
         // let optimal_2 = fungible_asset::withdraw_with_ref(
         //     transfer_ref,
@@ -421,7 +415,7 @@ module bonding_curve_launchpad::liquidity_pairs {
         //     optimal_amount_2
         // );
         // Place the APT and FA into the liquidity pair.
-        router::add_liquidity_coin<CoinType>(lp, optimal_1, optimal_2, is_stable, is_aptos_404, collection_address);
+        router::add_liquidity_coin<CoinType>(lp, optimal_1, optimal_2, is_stable);
     }
 
     //---------------------------Tests---------------------------
