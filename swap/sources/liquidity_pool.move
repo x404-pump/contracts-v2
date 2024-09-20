@@ -18,7 +18,7 @@ module swap::liquidity_pool {
         Self, FungibleAsset, FungibleStore, Metadata,
         BurnRef, MintRef, TransferRef,
     };
-    use aptos_framework::object::{Self, ConstructorRef, Object};
+    use aptos_framework::object::{Self, ConstructorRef, Object, object_address};
     use aptos_framework::primary_fungible_store;
     use aptos_std::comparator;
     use aptos_std::math128;
@@ -34,6 +34,9 @@ module swap::liquidity_pool {
     use std::signer;
     use std::string::{Self, String};
     use std::vector;
+    use std::debug;
+    use aptos_framework::dispatchable_fungible_asset;
+    use aptos_404::tokenized_nfts;
 
     friend swap::router;
 
@@ -358,18 +361,38 @@ module swap::liquidity_pool {
         let store_2 = pool_data.token_store_2;
         let swap_signer = &package_manager::get_signer();
         let fees_amount = (fees_amount as u128);
+        let fa_1_metadata = fungible_asset::store_metadata(store_1);
+        let fa_2_metadata = fungible_asset::store_metadata(store_2);
         let out = if (from_token == fungible_asset::store_metadata(pool_data.token_store_1)) {
             // User's swapping token 1 for token 2.
-            fungible_asset::deposit(store_1, from);
-            fungible_asset::deposit(pool_data.fees_store_1, fees);
+            if (aptos_404::tokenized_nfts::is_fa_metadata_aptos_404(object::object_address(&fa_1_metadata))) {
+                tokenized_nfts::commit_before_deposit(tokenized_nfts::get_collection_address(object::object_address(&fa_1_metadata)));
+            };
+            dispatchable_fungible_asset::deposit(store_1, from);
+            if (aptos_404::tokenized_nfts::is_fa_metadata_aptos_404(object::object_address(&fa_1_metadata))) {
+                tokenized_nfts::commit_before_deposit(tokenized_nfts::get_collection_address(object::object_address(&fa_1_metadata)));
+            };
+            dispatchable_fungible_asset::deposit(pool_data.fees_store_1, fees);
             fees_accounting.total_fees_1 = fees_accounting.total_fees_1 + fees_amount;
-            fungible_asset::withdraw(swap_signer, store_2, amount_out)
+            if (aptos_404::tokenized_nfts::is_fa_metadata_aptos_404(object::object_address(&fa_2_metadata))) {
+                tokenized_nfts::commit_before_withdraw(tokenized_nfts::get_collection_address(object::object_address(&fa_2_metadata)));
+            };
+            dispatchable_fungible_asset::withdraw(swap_signer, store_2, amount_out)
         } else {
             // User's swapping token 2 for token 1.
-            fungible_asset::deposit(store_2, from);
-            fungible_asset::deposit(pool_data.fees_store_2, fees);
+            if (aptos_404::tokenized_nfts::is_fa_metadata_aptos_404(object::object_address(&fa_2_metadata))) {
+                tokenized_nfts::commit_before_deposit(tokenized_nfts::get_collection_address(object::object_address(&fa_2_metadata)));
+            };
+            dispatchable_fungible_asset::deposit(store_2, from);
+            if (aptos_404::tokenized_nfts::is_fa_metadata_aptos_404(object::object_address(&fa_2_metadata))) {
+                tokenized_nfts::commit_before_deposit(tokenized_nfts::get_collection_address(object::object_address(&fa_2_metadata)));
+            };
+            dispatchable_fungible_asset::deposit(pool_data.fees_store_2, fees);
             fees_accounting.total_fees_2 = fees_accounting.total_fees_2 + fees_amount;
-            fungible_asset::withdraw(swap_signer, store_1, amount_out)
+            if (aptos_404::tokenized_nfts::is_fa_metadata_aptos_404(object::object_address(&fa_1_metadata))) {
+                tokenized_nfts::commit_before_withdraw(tokenized_nfts::get_collection_address(object::object_address(&fa_1_metadata)));
+            };
+            dispatchable_fungible_asset::withdraw(swap_signer, store_1, amount_out)
         };
 
         let k_after = calculate_constant_k(pool_data);
@@ -384,6 +407,7 @@ module swap::liquidity_pool {
     /// Mint LP tokens for the given liquidity. Note that the LP would receive a smaller amount of LP tokens if the
     /// amounts of liquidity provided are not optimal (do not conform with the constant formula of the pool). Users
     /// should compute the optimal amounts before calling this function.
+    #[lint::allow_unsafe_randomness]
     public fun mint(
         lp: &signer,
         fungible_asset_1: FungibleAsset,
@@ -425,8 +449,10 @@ module swap::liquidity_pool {
         assert!(liquidity_token_amount > 0, EINSUFFICIENT_LIQUIDITY_MINTED);
 
         // Deposit the received liquidity into the pool.
-        fungible_asset::deposit(store_1, fungible_asset_1);
-        fungible_asset::deposit(store_2, fungible_asset_2);
+        if (tokenized_nfts::is_fa_metadata_aptos_404(object::object_address(&token_1))) tokenized_nfts::commit_before_deposit(tokenized_nfts::get_collection_address(object_address(&token_1)));
+        if (tokenized_nfts::is_fa_metadata_aptos_404(object::object_address(&token_2))) tokenized_nfts::commit_before_deposit(tokenized_nfts::get_collection_address(object_address(&token_2)));
+        dispatchable_fungible_asset::deposit(store_1, fungible_asset_1);
+        dispatchable_fungible_asset::deposit(store_2, fungible_asset_2);
 
         // We need to update the amount of rewards claimable by this LP token store if they already have a previous
         // balance. This ensures that their update balance would not lead to earning a larger portion of the fees

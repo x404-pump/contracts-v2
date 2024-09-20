@@ -4,7 +4,7 @@ module aptos_404::tokenized_nfts {
   use std::option::{Self, Option};
   use std::vector::{Self};
   use aptos_std::smart_vector::{Self, SmartVector};
-  use aptos_framework::object::{Self, Object, ConstructorRef, TransferRef, ExtendRef};
+  use aptos_framework::object::{Self, Object, ConstructorRef, TransferRef, ExtendRef, object_exists};
   use aptos_framework::primary_fungible_store::{Self};
   use aptos_framework::fungible_asset::{Self, FungibleAsset, Metadata, TransferRef as FungibleTransferRef, MintRef};
   use aptos_framework::event::{Self};
@@ -53,10 +53,27 @@ module aptos_404::tokenized_nfts {
   }
 
   #[event]
-  struct TokenTransfered has drop, store {
-    amount: u64,
+  struct TokenWithdraw has drop, store {
     from: address,
+    amount: u64,
+  }
+
+  #[event]
+  struct TokenDeposit has drop, store {
     to: address,
+    amount: u64,
+  }
+
+  #[event]
+  struct NftWithdraw has drop, store {
+    from: address,
+    nft_address: address,
+  }
+
+  #[event]
+  struct NftDeposit has drop, store {
+    to: address,
+    nft_address: address,
   }
 
   // store under nfts address
@@ -164,6 +181,17 @@ module aptos_404::tokenized_nfts {
     object::create_object_address(&creator, *string::bytes(&metadata_seed))
   }
 
+  #[view]
+  public fun get_collection_address(fa_metadata_address: address): address acquires MetadataManager {
+    let collection_object = borrow_global<MetadataManager>(fa_metadata_address).collection;
+    object::object_address(&collection_object)
+  }
+
+  #[view]
+  public fun is_fa_metadata_aptos_404(fa_metadata_address: address): bool {
+    object_exists<MetadataManager>(fa_metadata_address)
+  }
+
   fun get_amount_withdrawn<T: key>(store: Object<T>, amount: u64): u64 {
     let balance_before = fungible_asset::balance<T>(store);
     let balance_after = balance_before - amount;
@@ -178,6 +206,8 @@ module aptos_404::tokenized_nfts {
     amount_nft_deposited
   }
 
+  /// A custom withdraw function, use 0x1::dispatchable_fungible_asset::withdraw to call this function.
+  /// Will (randomly) transfer 1 nft for each ONE_FA_VALUE of fa
   public fun withdraw<T: key>(
     store: Object<T>,
     amount: u64,
@@ -209,8 +239,17 @@ module aptos_404::tokenized_nfts {
       object::transfer_with_ref(nft_linear_transfer_ref, @aptos_404);
       holder.owner = @aptos_404;
       amount_nft_withdrawn = amount_nft_withdrawn - 1;
+      event::emit<NftWithdraw>(NftWithdraw {
+        from: owner,
+        nft_address: object::object_address(&nft),
+      });
     };
     assert!(amount_nft_withdrawn == 0, ENOT_ENOUGH_TOKEN_OWNED);
+
+    event::emit<TokenWithdraw>(TokenWithdraw {
+      from: owner,
+      amount,
+    });
 
     fungible_asset::withdraw_with_ref<T>(
       transfer_ref,
@@ -219,11 +258,14 @@ module aptos_404::tokenized_nfts {
     )
   }
 
+  /// A custom deposit function, use 0x1::dispatchable_fungible_asset::deposit to call this function.
+  /// Will (randomly) transfer 1 nft for each ONE_FA_VALUE of fa
   public fun deposit<T: key>(
     store: Object<T>,
     fa: FungibleAsset,
     transfer_ref: &FungibleTransferRef,
   ) acquires TokenManager, HoldersInfo, MetadataManager, CommitedDepositInfo {
+
     let metadata = fungible_asset::store_metadata<T>(store);
     let metadata_manager = borrow_global<MetadataManager>(object::object_address<Metadata>(&metadata));
     let collection_address = object::object_address<Collection>(&metadata_manager.collection);
@@ -250,8 +292,17 @@ module aptos_404::tokenized_nfts {
       object::transfer_with_ref(nft_linear_transfer_ref, owner);
       holder.owner = owner;
       amount_nft_deposited = amount_nft_deposited - 1;
+      event::emit<NftDeposit>(NftDeposit {
+        to: owner,
+        nft_address: object::object_address(&nft),
+      });
     };
     assert!(amount_nft_deposited == 0, ENOT_ENOUGH_TOKEN_OWNED);
+    event::emit<TokenDeposit>(TokenDeposit {
+      to: owner,
+      amount: fungible_asset::amount(&fa),
+    });
+
     fungible_asset::deposit_with_ref<T>(
       transfer_ref,
       store,
@@ -353,10 +404,12 @@ module aptos_404::tokenized_nfts {
     signer::address_of(&nft_signer)
   }
 
+  /// Creates a collection, and fungible asset associated with it.
   public fun create_collection(creator: &signer, description: String, supply: u64, name: String, uri: String, fa_symbol: String, fa_icon: String): ConstructorRef acquires DispatchFunctionInfo {
     create_collection_internal(creator, description, supply, name, option::none(), uri, fa_symbol, fa_icon)
   }
 
+  /// Creates a collection, fungible asset associated with it, and mint.
   #[lint::allow_unsafe_randomness]
   public fun create_collection_and_mint(creator: &signer, description: String, supply: u64, name: String, uri: String, fa_symbol: String, fa_icon: String, descriptions: vector<String>, names: vector<String>, uris: vector<String>) : (ConstructorRef, FungibleAsset) acquires TokenManager, FAManagedRef, MetadataManager, HoldersInfo, CommitedWithdrawInfo, DispatchFunctionInfo, CollectionInfo {
     let collection_constructor_ref = create_collection_internal(creator, description, supply, name, option::none(), uri, fa_symbol, fa_icon);
@@ -369,11 +422,13 @@ module aptos_404::tokenized_nfts {
     (collection_constructor_ref, fa)
   }
 
+  /// Mint a token from a collection.
   entry public fun mint(creator: &signer, collection_address: address, description: String, name: String, uri: String)
   acquires TokenManager, MetadataManager, HoldersInfo {
     mint_internal(creator, collection_address, description, name, uri);
   }
 
+  /// Batch mint token from a collection.
   entry public fun mint_batch_404s_in_collection(creator: &signer, collection_address: address, descriptions: vector<String>, names: vector<String>, uris: vector<String>)
   acquires TokenManager, MetadataManager, HoldersInfo {
     assert!(vector::length<String>(&descriptions) == vector::length<String>(&names) && vector::length<String>(&names) == vector::length<String>(&uris), EBATCH_LENGTH_MISMATCH);
@@ -382,6 +437,7 @@ module aptos_404::tokenized_nfts {
     };
   }
 
+  /// Transfers a token directly
   entry public fun transfer(from: &signer, to: address, token_address: address) acquires TokenManager, FAManagedRef, HoldersInfo {
     assert!(signer::address_of(from) != to, EINVALID_RECIPIENT);
     let token_object = object::address_to_object<TokenManager>(token_address);
@@ -406,6 +462,22 @@ module aptos_404::tokenized_nfts {
     let fa_transfer_ref = &borrow_global<FAManagedRef>(metadata_address).fa_transfer_ref;
     let fa_from = fungible_asset::withdraw_with_ref(fa_transfer_ref, from_store, ONE_FA_VALUE);
     fungible_asset::deposit_with_ref(fa_transfer_ref, to_store, fa_from);
+    event::emit<NftWithdraw>(NftWithdraw {
+      from: signer::address_of(from),
+      nft_address: token_address,
+    });
+    event::emit<NftDeposit>(NftDeposit {
+      to,
+      nft_address: token_address,
+    });
+    event::emit<TokenWithdraw>(TokenWithdraw {
+      from: signer::address_of(from),
+      amount: ONE_FA_VALUE,
+    });
+    event::emit<TokenDeposit>(TokenDeposit {
+      to,
+      amount: ONE_FA_VALUE,
+    });
   }
 
   fun get_collection_permuation(permutation: &mut SmartVector<u64>, collection_address: address) {

@@ -4,10 +4,14 @@ version = "0.0.0"
 
 [addresses]
 aptos_framework = "0x1"
-deployer = "6b5dd370b613d3aa9761aefd65d590136d87cc3d0369b0f14f9cabc83d5b9fb1"
-swap = "382a7483d472e344ab00a4c62a7db58d878e860fdb31b639806ff4871178ab62"
+deployer = "dc0116f28b34673574d92e108b4d70f72920ae4c119800ff3cce5b6945b31863"
+swap = "cc1bd8a476780529d9d06e155ef699ac71de01fee440a49c4ce3f0949340d36d"
+aptos_404 = "0x372118596d234f83783f4327cda84b8b9275117300c8702631c48d1a0d88f8f7"
 
 [dependencies.AptosFramework]
 git = "https://github.com/aptos-labs/aptos-core.git"
 rev = "mainnet"
 subdir = "aptos-move/framework/aptos-framework"
+
+[dependencies]
+aptos_404 = { local = "../aptos_404" }
