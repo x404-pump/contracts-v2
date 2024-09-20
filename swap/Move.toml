@@ -4,9 +4,8 @@ version = "0.0.0"
 
 [addresses]
 aptos_framework = "0x1"
-deployer = "dc0116f28b34673574d92e108b4d70f72920ae4c119800ff3cce5b6945b31863"
-swap = "cc1bd8a476780529d9d06e155ef699ac71de01fee440a49c4ce3f0949340d36d"
-aptos_404 = "0x372118596d234f83783f4327cda84b8b9275117300c8702631c48d1a0d88f8f7"
+deployer = "9a8d32d60b04fecba61f999127e863d20e2dc832e78d0fcb2a86ae825db3fa2c"
+swap = "0x2e29e4539d1d735e34ab7e2c59e3b38a18265a99fd3a58a9c4b434e7e9161739"
 
 [dependencies.AptosFramework]
 git = "https://github.com/aptos-labs/aptos-core.git"

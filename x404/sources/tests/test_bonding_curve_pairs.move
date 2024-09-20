@@ -132,7 +132,7 @@ module bonding_curve_launchpad::test_bonding_curve_pairs {
         let token_owned = tokenized_nfts::get_token_balance(object::address_to_object(collection_address), primary_store(signer::address_of(swapper), object::address_to_object<Metadata>(fa_metadata_address)));
         assert!(token_owned == 500, 2);
 
-        router::swap_coin_for_asset_entry<APT>(
+        router::swap_coin_for_asset_public<APT>(
             swapper,
             500 * ONE_FA_VALUE,
             0,
