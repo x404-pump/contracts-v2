@@ -5,7 +5,7 @@ authors = []
 upgrade_policy = "compatible"
 
 [addresses]
-bonding_curve_launchpad = "def790892d8bf9265efb92943710e5c5d00426d82bff7852e634eacb413f8493"
+bonding_curve_launchpad = "1164bbc29fb987baa62f73a941b60f758cc338372e20138a9ef82ce84819e585"
 
 [dependencies.AptosFramework]
 git = "https://github.com/aptos-labs/aptos-core.git"
