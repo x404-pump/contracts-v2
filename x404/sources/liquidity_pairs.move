@@ -16,6 +16,7 @@ module bonding_curve_launchpad::liquidity_pairs {
     use swap::router;
     use swap::liquidity_pool;
     use swap::coin_wrapper;
+    use std::debug;
     friend bonding_curve_launchpad::bonding_curve_launchpad;
 
     #[test_only]
@@ -43,7 +44,8 @@ module bonding_curve_launchpad::liquidity_pairs {
     struct LiquidityPairCreated has store, drop {
         fa_object_metadata: Object<Metadata>,
         initial_fa_reserves: u128,
-        initial_apt_reserves: u128
+        initial_apt_reserves: u128,
+        initial_fa_price: u64
     }
 
     #[event]
@@ -102,18 +104,20 @@ module bonding_curve_launchpad::liquidity_pairs {
             let divisor = fa_reserves + (amount_in as u128);
             let apt_gained = (math128::mul_div(apt_reserves, (amount_in as u128), divisor) as u64);
             apt_gained = ((math128::min((apt_gained as u128), apt_reserves - initial_virtual_apt_liquidity)) as u64);
-            let fa_updated_reserves = fa_reserves + (amount_in as u128);
+            let fa_given = math128::mul_div((apt_gained as u128), fa_reserves, apt_reserves) as u64;
+            let fa_updated_reserves = fa_reserves + (fa_given as u128);
             let apt_updated_reserves = apt_reserves - (apt_gained as u128);
             assert!(apt_gained > 0, ELIQUIDITY_PAIR_SWAP_AMOUNTOUT_INSIGNIFICANT);
-            (amount_in, apt_gained, fa_updated_reserves, apt_updated_reserves)
+            (fa_given, apt_gained, fa_updated_reserves, apt_updated_reserves)
         } else {
             let divisor = apt_reserves + (amount_in as u128);
             let fa_gained = (math128::mul_div(fa_reserves, (amount_in as u128), divisor) as u64);
             fa_gained = ((math128::min((fa_gained as u128), fa_reserves - (min_remaining_fa as u128))) as u64);
+            let apt_given = math128::mul_div((fa_gained as u128), apt_reserves, fa_reserves) as u64;
             let fa_updated_reserves = fa_reserves - (fa_gained as u128);
-            let apt_updated_reserves = apt_reserves + (amount_in as u128);
+            let apt_updated_reserves = apt_reserves + (apt_given as u128);
             assert!(fa_gained > 0, ELIQUIDITY_PAIR_SWAP_AMOUNTOUT_INSIGNIFICANT);
-            (fa_gained, amount_in, fa_updated_reserves, apt_updated_reserves)
+            (fa_gained, apt_given, fa_updated_reserves, apt_updated_reserves)
         }
     }
 
@@ -202,7 +206,8 @@ module bonding_curve_launchpad::liquidity_pairs {
             LiquidityPairCreated {
                 fa_object_metadata,
                 initial_fa_reserves: amount,
-                initial_apt_reserves: apt_initial_reserves
+                initial_apt_reserves: apt_initial_reserves,
+                initial_fa_price: fa_inital_price
             }
         );
         // Optional initial swap given to the creator of the FA.

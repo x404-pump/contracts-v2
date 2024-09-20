@@ -17,6 +17,7 @@ module bonding_curve_launchpad::test_bonding_curve_pairs {
     use aptos_404::tokenized_nfts;
     use bonding_curve_launchpad::liquidity_pairs;
     use bonding_curve_launchpad::bonding_curve_launchpad;
+    use swap::router;
 
     const ONE_FA_VALUE: u64 = 100_000_000;
 
@@ -131,16 +132,18 @@ module bonding_curve_launchpad::test_bonding_curve_pairs {
         let token_owned = tokenized_nfts::get_token_balance(object::address_to_object(collection_address), primary_store(signer::address_of(swapper), object::address_to_object<Metadata>(fa_metadata_address)));
         assert!(token_owned == 500, 2);
 
-        // let token_owned = tokenized_nfts::get_token_balance(object::address_to_object(collection_address), primary_store(signer::address_of(swapper), object::address_to_object<Metadata>(fa_metadata_address)));
-        // assert!(token_owned == 1, 2);
-
-        // router::swap_coin_for_asset_entry<APT>(
-        //     swapper,
-        //     500 * ONE_FA_VALUE,
-        //     500 * ONE_FA_VALUE,
-        //     object::address_to_object(fa_metadata_address),
-        //     false,
-        //     signer::address_of(swapper),
-        // );
+        router::swap_coin_for_asset_entry<APT>(
+            swapper,
+            500 * ONE_FA_VALUE,
+            0,
+            object::address_to_object(fa_metadata_address),
+            false,
+            signer::address_of(swapper),
+        );
+        token_owned = tokenized_nfts::get_token_balance(object::address_to_object(collection_address), primary_store(signer::address_of(swapper), object::address_to_object<Metadata>(fa_metadata_address)));    
+        assert!(token_owned == 500 + 249, 3);
+        
+        fa_balance = primary_fungible_store::balance<fungible_asset::Metadata>(signer::address_of(swapper), object::address_to_object(fa_metadata_address));
+        assert!(fa_balance == 24974974974 + 50000000000, 4);
     }
 }

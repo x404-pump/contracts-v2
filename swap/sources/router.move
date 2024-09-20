@@ -15,6 +15,8 @@ module swap::router {
     use swap::coin_wrapper;
     use swap::liquidity_pool::{Self, LiquidityPool};
 
+    use std::debug;
+
     use aptos_404::tokenized_nfts;
 
     /// Output is less than the desired minimum amount.
@@ -104,6 +106,9 @@ module swap::router {
     ) {
         let in = coin::withdraw<FromCoin>(user, amount_in);
         let out = swap_coin_for_asset<FromCoin>(in, amount_out_min, to_token, is_stable);
+        if (aptos_404::tokenized_nfts::is_fa_metadata_aptos_404(object::object_address(&to_token))) aptos_404::tokenized_nfts::commit_before_deposit(
+            aptos_404::tokenized_nfts::get_collection_address(object::object_address(&to_token)),
+        );
         primary_fungible_store::deposit(recipient, out);
     }
 
